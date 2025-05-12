@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getInvitation, addFriend, deleteInvitation } from '@/lib/firebase/services';
 import type { InvitationClient } from '@/lib/types'; // Use InvitationClient
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Added CardFooter
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -63,6 +63,7 @@ function InvitePageContent() {
         }
 
         if (!user) {
+            // Redirect to signup page with invite code if not logged in
             router.push(`/signup?invite=${inviteCode}`);
             return;
         }

@@ -3,6 +3,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
+// Load config from environment variables
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -14,48 +15,48 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp | null = null;
-let authInstance: Auth | null = null; // Renamed to avoid conflict with export
-let dbInstance: Firestore | null = null; // Renamed to avoid conflict with export
+let authInstance: Auth | null = null;
+let dbInstance: Firestore | null = null;
+let firebaseInitializationError: Error | null = null; // Added to store initialization error
 
-// Validate essential config
-if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
-  console.error(
-    "Firebase configuration is missing essential values (apiKey, authDomain, projectId). " +
-    "Please check your .env.local file and ensure NEXT_PUBLIC_FIREBASE_* variables are set correctly. " +
-    "Firebase services will not be initialized."
-  );
+// Function to check if Firebase essential config is provided
+export const isFirebaseConfigured = (): boolean => !!firebaseConfig.apiKey && !!firebaseConfig.authDomain && !!firebaseConfig.projectId;
+
+// Initialize Firebase
+if (!isFirebaseConfigured()) {
+  const errorMessage = "Firebase configuration is missing essential values (apiKey, authDomain, projectId). Please check your .env.local file and ensure NEXT_PUBLIC_FIREBASE_* variables are set correctly. Firebase services will not be initialized.";
+  console.error(errorMessage);
+  firebaseInitializationError = new Error(errorMessage);
 } else {
   try {
-    // Initialize Firebase only if it hasn't been initialized yet
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
-       console.log("Firebase initialized successfully."); // Add log for confirmation
+      console.log("Firebase initialized successfully.");
     } else {
       app = getApp();
-       console.log("Firebase app already initialized."); // Add log
+      console.log("Firebase app already initialized.");
     }
 
-    // Get Auth and Firestore instances only if app initialization was successful
     if (app) {
       authInstance = getAuth(app);
       dbInstance = getFirestore(app);
     } else {
-       console.error("Firebase app instance is null after attempting initialization.");
+      const errorMessage = "Firebase app instance is null after attempting initialization.";
+      console.error(errorMessage);
+       firebaseInitializationError = new Error(errorMessage);
     }
-
   } catch (error) {
     console.error("Error initializing Firebase:", error);
-    // If initialization fails (e.g., invalid config values even if present),
-    // ensure app, auth, and db remain null.
+    firebaseInitializationError = error instanceof Error ? error : new Error(String(error));
     app = null;
     authInstance = null;
     dbInstance = null;
   }
 }
 
-// Export potentially null values. Components using these need to handle the null case.
-// Assign to exported variables
 const auth = authInstance;
 const db = dbInstance;
 
-export { app, auth, db };
+// Export potentially null values and the error state.
+// Components using these need to handle the null case.
+export { app, auth, db, firebaseInitializationError };

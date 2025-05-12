@@ -1,8 +1,9 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  output: 'export', // Add this line for static export
   images: {
-    unoptimized: false, // Set to false for SSR with image optimization
+    unoptimized: true, // Required for static export if using next/image
     remotePatterns: [
       {
         protocol: 'https',

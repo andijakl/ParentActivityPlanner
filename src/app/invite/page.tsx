@@ -1,8 +1,8 @@
-// src/app/invite/[code]/page.tsx
+// src/app/invite/page.tsx
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useEffect, useState, Suspense } from 'react'; // Import Suspense
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getInvitation, addFriend, deleteInvitation } from '@/lib/firebase/services';
 import type { Invitation } from '@/lib/types';
@@ -13,9 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { UserPlus, AlertTriangle, CheckCircle, Home } from 'lucide-react';
 
-export default function InvitePage() {
-  const params = useParams();
-  const inviteCode = params.code as string;
+function InvitePageContent() { // Wrap content in a separate component
+  const searchParams = useSearchParams();
+  const inviteCode = searchParams.get('code'); // Get code from query parameter
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -28,6 +28,7 @@ export default function InvitePage() {
   useEffect(() => {
     if (inviteCode) {
       setIsLoading(true);
+      setError(null); // Reset error on new code check
       getInvitation(inviteCode)
         .then(data => {
           if (data) {
@@ -50,6 +51,11 @@ export default function InvitePage() {
   }, [inviteCode]);
 
    const handleAcceptInvite = async () => {
+        if (!inviteCode) {
+            setError("Invitation code is missing.");
+            return;
+        }
+
         if (!user) {
             // If user is not logged in, redirect to sign up with the invite code
             router.push(`/signup?invite=${inviteCode}`);
@@ -131,7 +137,7 @@ export default function InvitePage() {
           {error ? (
             <p className="text-destructive">{error}</p>
           ) : invitation ? (
-            <Button onClick={handleAcceptInvite} disabled={isAccepting} className="w-full">
+            <Button onClick={handleAcceptInvite} disabled={isAccepting || !inviteCode} className="w-full">
               {isAccepting ? 'Connecting...' : (user ? 'Accept Invitation' : 'Sign Up to Accept')}
             </Button>
           ) : (
@@ -147,5 +153,14 @@ export default function InvitePage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function InvitePage() {
+  return (
+    // Wrap the component using useSearchParams in Suspense
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Skeleton className="h-12 w-12" /> Loading...</div>}>
+      <InvitePageContent />
+    </Suspense>
   );
 }

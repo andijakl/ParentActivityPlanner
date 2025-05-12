@@ -33,7 +33,7 @@ export default function FriendsPage() {
   const [isLoadingFriends, setIsLoadingFriends] = useState(true);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isRemovingFriend, setIsRemovingFriend] = useState<string | null>(null); // Store friend UID being removed
-
+  const [inviteLink, setInviteLink] = useState<string | null>(null); // Store the full invite link
 
    const fetchFriends = useCallback(async () => {
         if (user) {
@@ -63,7 +63,10 @@ export default function FriendsPage() {
     try {
       const code = await generateInviteCode(user.uid, userProfile.displayName ?? user.displayName);
       setInviteCode(code);
-      toast({ title: "Invite Code Generated!", description: "Share this code with a friend." });
+      // Generate the invite link using query parameter
+      const link = `${window.location.origin}/invite?code=${code}`;
+      setInviteLink(link);
+      toast({ title: "Invite Code Generated!", description: "Share this link with a friend." });
     } catch (error) {
       console.error("Error generating invite code:", error);
       toast({ title: "Error", description: "Could not generate invite code.", variant: "destructive" });
@@ -73,9 +76,8 @@ export default function FriendsPage() {
   };
 
   const handleCopyCode = () => {
-    if (!inviteCode) return;
-    const inviteUrl = `${window.location.origin}/invite/${inviteCode}`;
-    navigator.clipboard.writeText(inviteUrl)
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink)
       .then(() => {
         toast({ title: "Invite Link Copied!", description: "Link ready to be shared." });
       })
@@ -132,9 +134,9 @@ export default function FriendsPage() {
              <CardDescription>Share your unique invite link with other parents to connect.</CardDescription>
            </CardHeader>
            <CardContent className="flex flex-col sm:flex-row items-center gap-4">
-             {inviteCode ? (
+             {inviteLink ? (
                  <>
-                     <Input value={`${window.location.origin}/invite/${inviteCode}`} readOnly className="flex-1" />
+                     <Input value={inviteLink} readOnly className="flex-1" />
                      <Button onClick={handleCopyCode} variant="outline" size="icon" aria-label="Copy invite link">
                        <Copy className="h-4 w-4" />
                      </Button>

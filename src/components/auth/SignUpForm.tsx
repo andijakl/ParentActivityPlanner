@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase/config';
+import { auth, db } from '@/lib/firebase/config'; // auth and db can be null
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -18,7 +18,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
 import type { UserProfile, Invitation } from '@/lib/types';
-import { addFriend, deleteInvitation } from '@/lib/firebase/services'; // Import friend/invite functions
+import { addFriend, deleteInvitation, getInvitation } from '@/lib/firebase/services'; // Import needed functions
+
 
 const formSchema = z.object({
   displayName: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -46,12 +47,40 @@ export function SignUpForm() {
   });
 
   // Function to handle invite code after user creation/sign-in
-  const handleInvite = async (userId: string, inviterId: string, code: string) => {
+  const handleInvite = async (userId: string, code: string) => {
+      if (!db) {
+          console.error("Firestore (db) is not initialized. Cannot handle invite.");
+          toast({ title: "Invite Error", description: "Database service unavailable.", variant: "destructive" });
+          return;
+      }
     try {
-      await addFriend(userId, inviterId); // Add friendship in both directions
-      await addFriend(inviterId, userId);
-      await deleteInvitation(code); // Remove the used invitation
-      toast({ title: "Friend Added!", description: "You are now connected with your friend." });
+      const invitation = await getInvitation(code); // getInvitation checks db
+
+      if (!invitation) {
+          toast({ title: "Invite Not Found", description: "The invite code is invalid or expired.", variant: "destructive" });
+          return;
+      }
+
+      if (userId === invitation.inviterId) {
+           toast({ title: "Cannot Add Self", description: "You cannot accept your own invitation.", variant: "destructive" });
+           return;
+      }
+
+        // Check if already friends before adding
+       const friendRef = doc(db, `users/${userId}/friends/${invitation.inviterId}`);
+       const friendSnap = await getDoc(friendRef);
+
+        if (!friendSnap.exists()) {
+            await addFriend(userId, invitation.inviterId); // Add friendship in both directions
+            await addFriend(invitation.inviterId, userId);
+            await deleteInvitation(code); // Remove the used invitation
+            toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
+        } else {
+            toast({ title: "Already Friends", description: "You are already connected with this friend." });
+            // Optionally still delete the invitation if already friends
+            await deleteInvitation(code);
+        }
+
     } catch (error) {
       console.error("Error handling invite code:", error);
       toast({ title: "Invite Error", description: "Could not process the invite code.", variant: "destructive" });
@@ -59,6 +88,10 @@ export function SignUpForm() {
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!auth || !db) {
+        toast({ title: "Error", description: "Authentication or database service is unavailable.", variant: "destructive"});
+        return;
+    }
     setIsLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
@@ -84,14 +117,7 @@ export function SignUpForm() {
 
       // Handle invite code if present
       if (inviteCode) {
-        const inviteDocRef = doc(db, "invitations", inviteCode);
-        const inviteDocSnap = await getDoc(inviteDocRef);
-        if (inviteDocSnap.exists()) {
-          const invitationData = inviteDocSnap.data() as Invitation;
-          await handleInvite(user.uid, invitationData.inviterId, inviteCode);
-        } else {
-           toast({ title: "Invite Not Found", description: "The invite code is invalid or expired.", variant: "destructive" });
-        }
+          await handleInvite(user.uid, inviteCode);
       }
 
 
@@ -117,6 +143,10 @@ export function SignUpForm() {
   }
 
   async function handleGoogleSignIn() {
+     if (!auth || !db) {
+         toast({ title: "Error", description: "Authentication or database service is unavailable.", variant: "destructive"});
+         return;
+     }
     setIsGoogleLoading(true);
     const provider = new GoogleAuthProvider();
     try {
@@ -147,24 +177,7 @@ export function SignUpForm() {
 
        // Handle invite code if present
       if (inviteCode) {
-        const inviteDocRef = doc(db, "invitations", inviteCode);
-        const inviteDocSnap = await getDoc(inviteDocRef);
-        if (inviteDocSnap.exists()) {
-          const invitationData = inviteDocSnap.data() as Invitation;
-           // Check if already friends before adding
-           const friendRef = doc(db, `users/${user.uid}/friends/${invitationData.inviterId}`);
-           const friendSnap = await getDoc(friendRef);
-           if (!friendSnap.exists()) {
-                await handleInvite(user.uid, invitationData.inviterId, inviteCode);
-           } else {
-               toast({ title: "Already Friends", description: "You are already connected with this friend." });
-               // Optionally still delete the invitation
-               await deleteInvitation(inviteCode);
-           }
-
-        } else {
-           toast({ title: "Invite Not Found", description: "The invite code is invalid or expired.", variant: "destructive" });
-        }
+          await handleInvite(user.uid, inviteCode);
       }
 
 
@@ -253,13 +266,13 @@ export function SignUpForm() {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading || !auth || !db}>
               {isLoading ? "Creating Account..." : "Sign Up"}
             </Button>
           </form>
         </Form>
         <Separator className="my-6" />
-         <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading || isGoogleLoading}>
+         <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading || isGoogleLoading || !auth || !db}>
               {isGoogleLoading ? "Signing In..." : (
                <>
                   <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48px" height="48px"><path fill="#EA4335" d="M24 9.5c3.48 0 6.38 1.19 8.63 3.27L38.5 7.1C34.63 3.68 29.74 1.5 24 1.5 14.87 1.5 7.07 6.84 3.5 14.29l6.88 5.31C11.97 13.31 17.57 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24c0-1.63-.15-3.2-.43-4.7H24v8.98h12.64c-.55 2.9-2.17 5.37-4.6 7.06l6.62 5.13C43.17 36.3 46.5 30.77 46.5 24z"/><path fill="#34A853" d="M10.38 29.6c-.52-1.56-.81-3.23-.81-4.96s.29-3.4.81-4.96L3.5 14.29C1.94 17.39 1 20.6 1 24s.94 6.61 2.5 9.71l6.88-5.31z"/><path fill="#FBBC05" d="M24 46.5c5.74 0 10.63-1.92 14.13-5.19l-6.62-5.13c-1.91 1.28-4.37 2.05-7.51 2.05-6.43 0-12.03-3.81-13.62-9.08L3.5 34.29C7.07 41.16 14.87 46.5 24 46.5z"/><path fill="none" d="M0 0h48v48H0z"/></svg>

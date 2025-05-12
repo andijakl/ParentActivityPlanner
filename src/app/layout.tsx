@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Activity Hub',
-  description: 'Coordinate activities with other parents and their children.',
+  title: 'Parent Activity Hub',
+  description: 'Coordinate activities with other parents and their children using Parent Activity Hub.',
 };
 
 export default function RootLayout({

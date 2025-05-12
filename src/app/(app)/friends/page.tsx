@@ -160,7 +160,7 @@ export default function FriendsPage() {
        <Card>
            <CardHeader>
              <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5"/> Your Friends</CardTitle>
-             <CardDescription>People you have connected with on Activity Hub.</CardDescription>
+             <CardDescription>People you have connected with on Parent Activity Hub.</CardDescription>
            </CardHeader>
            <CardContent>
                {isLoadingFriends ? (

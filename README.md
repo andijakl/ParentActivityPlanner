@@ -1,6 +1,6 @@
-# Activity Hub
+# Parent Activity Hub
 
-Activity Hub is a web application designed to help parents coordinate activities with other parents and their children. It allows users to create profiles, plan activities, connect with friends using invite codes, and join each other's events.
+Parent Activity Hub is a web application designed to help parents coordinate activities with other parents and their children. It allows users to create profiles, plan activities, connect with friends using invite codes, and join each other's events.
 
 Built with Next.js, TypeScript, Tailwind CSS, ShadCN UI, and Firebase.
 
@@ -28,7 +28,7 @@ Built with Next.js, TypeScript, Tailwind CSS, ShadCN UI, and Firebase.
 1.  **Clone the repository:**
     ```bash
     git clone <repository-url>
-    cd activity-hub
+    cd parent-activity-hub
     ```
 
 2.  **Install dependencies:**
@@ -130,43 +130,50 @@ Upload these rules via the Firebase Console ("Firestore Database" > "Rules" tab)
 
 ## Deployment
 
-This project uses dynamic routes (e.g., `/activities/[id]`) and therefore **cannot** be deployed using Next.js static export (`output: 'export'`). You need a hosting provider that supports Next.js Server-Side Rendering (SSR) or Incremental Static Regeneration (ISR).
+This project uses Next.js App Router and can be deployed as a static site using `output: 'export'`.
 
-**Recommended Deployment Options:**
+**Recommended Deployment: Firebase Hosting**
 
-*   **Vercel (Recommended for Next.js):** Vercel is the platform built by the creators of Next.js and offers seamless deployment. Connect your Git repository, and Vercel will handle the build and deployment automatically.
-*   **Netlify:** Netlify also provides excellent support for Next.js applications, including SSR and ISR features.
-*   **Firebase Hosting + Cloud Functions (SSR):** You can deploy the Next.js application as a Node.js server within a Firebase Cloud Function and use Firebase Hosting to serve the function. This requires more setup than Vercel or Netlify.
-*   **Other Node.js Hosting:** Platforms like Google Cloud Run, AWS Lambda, Heroku, or DigitalOcean can host the Next.js Node.js server.
+Firebase Hosting is well-suited for static Next.js exports.
 
-**Example Setup: Firebase Hosting + Cloud Functions (SSR)**
+1.  **Ensure `output: 'export'` is in `next.config.ts`:**
+    ```ts
+    // next.config.ts
+    import type { NextConfig } from 'next';
 
-This is a more involved setup compared to Vercel/Netlify.
+    const nextConfig: NextConfig = {
+      output: 'export', // Enable static export
+      // ... other config like images ...
+    };
 
-1.  **Ensure `output: 'export'` is NOT in `next.config.ts`:** The `next.config.ts` should *not* contain the `output: 'export'` line.
-
-2.  **Initialize Firebase Functions:**
-    ```bash
-    firebase init functions
+    export default nextConfig;
     ```
-    *   Choose TypeScript.
-    *   Install dependencies with npm when prompted.
-    *   Structure your functions code to serve the Next.js app (refer to Firebase documentation for deploying Next.js apps). You might need a `functions/src/index.ts` that imports and runs your Next.js server.
+
+2.  **Build the static site:**
+    ```bash
+    npm run build
+    # or
+    # yarn build
+    # or
+    # pnpm build
+    ```
+    This will generate the static files in the `out/` directory.
 
 3.  **Initialize Firebase Hosting (if not already done):**
     ```bash
     firebase init hosting
     ```
     *   Select "Use an existing project".
-    *   Point to a public directory (e.g., `public`). Static assets handled by Next.js itself can go here, but the main serving happens via the function.
-    *   Configure as a single-page app: No.
+    *   Set the public directory to `out`.
+    *   Configure as a single-page app: **Yes**. This is important for handling client-side routing.
+    *   Set up automatic builds and deploys with GitHub: No (unless you want to configure CI/CD).
 
-4.  **Modify `firebase.json` for SSR Rewrite:**
-    Update your `firebase.json` to rewrite all requests to your Cloud Function:
+4.  **Modify `firebase.json`:**
+    Ensure your `firebase.json` looks similar to this:
     ```json
     {
       "hosting": {
-        "public": "public", // Or your chosen static assets folder
+        "public": "out", // Point to the Next.js export directory
         "ignore": [
           "firebase.json",
           "**/.*",
@@ -175,36 +182,64 @@ This is a more involved setup compared to Vercel/Netlify.
         "rewrites": [
           {
             "source": "**",
-            "function": "nextServer" // Replace "nextServer" with your function's name
+            "destination": "/index.html" // Serve index.html for all routes (SPA behavior)
           }
         ]
-      },
-      "functions": [
-        {
-          "source": "functions", // Or your functions directory
-          "codebase": "default",
-          "runtime": "nodejs18" // Or your preferred runtime
-          // Add necessary configurations for memory, region, etc.
-        }
-      ]
+      }
+      // Remove the "functions" section if you are not using SSR Cloud Functions
     }
     ```
+    The rewrite rule ensures that all paths are served by `index.html`, allowing Next.js client-side router to handle them.
 
-5.  **Build and Deploy:**
+5.  **Deploy to Firebase Hosting:**
     ```bash
-    npm run build
-    firebase deploy --only hosting,functions
+    firebase deploy --only hosting
     ```
 
-**Continuous Deployment (CI/CD) - Example with GitHub Actions for Vercel/Netlify:**
+**Other Static Hosting Options:**
 
-Most modern platforms integrate directly with Git providers.
+You can also deploy the contents of the `out/` directory to other static hosting providers like Vercel (select "Other" framework type), Netlify, GitHub Pages, etc. Ensure they are configured to handle Single Page Applications (SPAs) correctly (usually by redirecting all paths to `index.html`).
 
-1.  **Push your code** to a GitHub/GitLab/Bitbucket repository.
-2.  **Connect your repository** to Vercel or Netlify via their dashboards.
-3.  **Configure build settings** (usually detected automatically for Next.js).
-4.  **Set Environment Variables** (like your `NEXT_PUBLIC_FIREBASE_*` keys) in the Vercel/Netlify project settings.
-5.  **Deployments will trigger automatically** on pushes to your main branch (or configured branches).
+**Continuous Deployment (CI/CD) - Example with GitHub Actions for Firebase Hosting:**
 
-Choose the deployment option that best suits your needs and technical comfort level. Vercel or Netlify are generally the easiest for Next.js applications.
+1.  **Push your code** to a GitHub repository.
+2.  **Set up GitHub Actions:** Create a `.github/workflows/firebase-deploy.yml` file:
+    ```yaml
+    name: Deploy to Firebase Hosting
+
+    on:
+      push:
+        branches:
+          - main # Or your deployment branch
+
+    jobs:
+      build_and_deploy:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          - name: Use Node.js
+            uses: actions/setup-node@v3
+            with:
+              node-version: '18' # Match your development Node.js version
+              cache: 'npm' # Or yarn/pnpm
+          - name: Install Dependencies
+            run: npm install # Or yarn install / pnpm install
+          - name: Build Next.js App
+            run: npm run build # Or yarn build / pnpm build
+            env: # Set build-time environment variables if needed
+              NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+              NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+              # ... add all other NEXT_PUBLIC_ variables ...
+          - name: Deploy to Firebase Hosting
+            uses: FirebaseExtended/action-hosting-deploy@v0
+            with:
+              repoToken: '${{ secrets.GITHUB_TOKEN }}'
+              firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PARENT_ACTIVITY_HUB }}' # Your service account JSON key
+              channelId: live
+              projectId: your-firebase-project-id # Your Firebase Project ID
+    ```
+3.  **Add Secrets to GitHub:**
+    *   Go to your GitHub repository settings > Secrets and variables > Actions.
+    *   Add secrets for `FIREBASE_SERVICE_ACCOUNT_PARENT_ACTIVITY_HUB` (generate a service account key in Firebase Project Settings > Service accounts) and all your `NEXT_PUBLIC_FIREBASE_*` variables.
+4.  **Push the workflow file.** Deployments will trigger automatically on pushes to the specified branch.
 ```

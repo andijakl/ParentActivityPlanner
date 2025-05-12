@@ -130,7 +130,7 @@ function InvitePageContent() { // Wrap content in a separate component
              )}
           </CardTitle>
            {invitation && !error && <CardDescription className="pt-2">
-                {invitation.inviterName || 'A friend'} wants to connect with you on Activity Hub.
+                {invitation.inviterName || 'A friend'} wants to connect with you on Parent Activity Hub.
             </CardDescription>}
         </CardHeader>
         <CardContent>

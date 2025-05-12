@@ -204,7 +204,7 @@ export function SignUpForm() {
     <Card>
       <CardHeader>
         <CardTitle className="text-2xl">Sign Up</CardTitle>
-        <CardDescription>Create your Activity Hub account.</CardDescription>
+        <CardDescription>Create your Parent Activity Hub account.</CardDescription>
         {inviteCode && (
             <CardDescription className="text-primary pt-2">
                 You've been invited! Sign up to connect with your friend.

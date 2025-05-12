@@ -21,7 +21,7 @@ export function AppHeader() {
           className="flex items-center gap-2 font-semibold text-foreground"
         >
           <Mountain className="h-6 w-6 text-primary" />
-          <span className="">Activity Hub</span>
+          <span className="">Parent Activity Hub</span>
       </Link>
 
 

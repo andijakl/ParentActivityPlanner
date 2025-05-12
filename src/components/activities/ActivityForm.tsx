@@ -80,7 +80,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
         const activityData: Omit<Activity, 'id' | 'createdAt'> = {
             title: values.title,
             date: Timestamp.fromDate(combinedDateTime), // Convert to Firestore Timestamp
-            location: values.location || null, // Store as null if empty/falsy (Firestore doesn't accept undefined)
+            location: values.location || null, // Store as null if empty/falsy
             // description: values.description || null,
             creatorId: user.uid,
             creatorName: userProfile.displayName ?? user.displayName ?? 'Unknown User',
@@ -108,7 +108,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
          if (onFormSubmit) {
              onFormSubmit(activityId); // Call callback if provided
          } else {
-             router.push(`/activities/${activityId}`); // Redirect to activity details page
+             router.push(`/dashboard`); // Redirect to dashboard page
          }
 
 

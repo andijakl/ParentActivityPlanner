@@ -41,7 +41,7 @@ export default function DashboardPage() {
 
   const welcomeMessage = userProfile?.displayName
     ? `Welcome back, ${userProfile.displayName}!`
-    : "Welcome to Activity Hub!";
+    : "Welcome to Parent Activity Hub!";
 
   return (
     <div className="container mx-auto py-6 px-4 md:px-6">

@@ -51,7 +51,7 @@ export function AppSidebar() {
                 >
                 <Mountain className="h-6 w-6 text-primary" />
                 {/* Label visible when expanded */}
-                <span className="group-data-[collapsible=icon]:hidden">Activity Hub</span>
+                <span className="group-data-[collapsible=icon]:hidden">Parent Activity Hub</span>
              </Link>
             {/* Optional: Add a trigger inside the header if needed */}
             {/* <SidebarTrigger className="ml-auto group-data-[collapsible=icon]:hidden" /> */}

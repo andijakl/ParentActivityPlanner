@@ -4,16 +4,16 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getDashboardActivities } from '@/lib/firebase/services';
-import type { Activity } from '@/lib/types';
+import type { ActivityClient } from '@/lib/types'; // Use ActivityClient
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ActivityList } from '@/components/activities/ActivityList'; // We'll create this next
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state
+import { ActivityList } from '@/components/activities/ActivityList';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
   const { user, userProfile } = useAuth();
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<ActivityClient[]>([]); // Use ActivityClient
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +21,7 @@ export default function DashboardPage() {
     if (user) {
       setIsLoading(true);
       setError(null);
-      getDashboardActivities(user.uid)
+      getDashboardActivities(user.uid) // This now returns ActivityClient[]
         .then(fetchedActivities => {
           setActivities(fetchedActivities);
         })
@@ -33,7 +33,6 @@ export default function DashboardPage() {
           setIsLoading(false);
         });
     } else {
-        // Should be redirected by layout, but handle defensively
         setIsLoading(false);
         setActivities([]);
     }
@@ -82,8 +81,6 @@ export default function DashboardPage() {
                 )}
             </CardContent>
         </Card>
-
-      {/* You can add more sections here, e.g., Past Activities, Friend Requests */}
     </div>
   );
 }

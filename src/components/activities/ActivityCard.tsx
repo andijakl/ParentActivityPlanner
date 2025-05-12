@@ -2,23 +2,21 @@
 "use client";
 
 import React from 'react';
-import type { Activity } from '@/lib/types';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import type { ActivityClient } from '@/lib/types'; // Use ActivityClient
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { de } from 'date-fns/locale'; // Keep German locale for date formatting conventions
+import { de } from 'date-fns/locale';
 import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { joinActivity, leaveActivity } from '@/lib/firebase/services';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Timestamp } from 'firebase/firestore'; // Explicit import
-
 
 interface ActivityCardProps {
-  activity: Activity;
+  activity: ActivityClient; // Expect ActivityClient
   currentUserId: string;
 }
 
@@ -27,17 +25,15 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
     const { toast } = useToast();
     const [isJoining, setIsJoining] = React.useState(false);
     const [isLeaving, setIsLeaving] = React.useState(false);
-    const [needsRefresh, setNeedsRefresh] = React.useState(false); // State to trigger re-fetch in parent if needed
 
     const isCreator = activity.creatorId === currentUserId;
     const isParticipant = activity.participants.some(p => p.uid === currentUserId);
 
-    // Defensive check for timestamp
-    const activityDate = activity.date instanceof Timestamp ? activity.date.toDate() : (activity.date instanceof Date ? activity.date : null);
+    // activity.date is an ISO string, parse it to a Date object
+    const activityDate = activity.date ? new Date(activity.date) : null;
 
-    // Format date and time using German locale and 24-hour format
-    const formattedDate = activityDate ? format(activityDate, "PPP", { locale: de }) : 'Date TBD';
-    const formattedTime = activityDate ? format(activityDate, "HH:mm", { locale: de }) : 'Time TBD';
+    const formattedDate = activityDate && !isNaN(activityDate.getTime()) ? format(activityDate, "PPP", { locale: de }) : 'Date TBD';
+    const formattedTime = activityDate && !isNaN(activityDate.getTime()) ? format(activityDate, "HH:mm", { locale: de }) : 'Time TBD';
 
     const handleJoin = async () => {
         if (!user || !userProfile) return;
@@ -50,10 +46,7 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
             };
             await joinActivity(activity.id, participantData);
             toast({ title: "Joined Activity!", description: `You have joined "${activity.title}".` });
-            // Instead of reload, signal parent or update local state if possible
-            // For simplicity, we'll keep reload but ideally parent handles data refresh
-             window.location.reload();
-             // setNeedsRefresh(true); // Example of signaling parent
+            window.location.reload(); // Consider a more targeted refresh
         } catch (error) {
             console.error("Error joining activity:", error);
             toast({ title: "Error", description: "Could not join activity.", variant: "destructive" });
@@ -66,19 +59,15 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
         if (!user || !userProfile) return;
         setIsLeaving(true);
          try {
-            // Find the exact participant object to remove (needed for arrayRemove)
              const participantToRemove = activity.participants.find(p => p.uid === user.uid);
              if (!participantToRemove) {
                  console.warn("Current user not found in participant list for removal.");
                  setIsLeaving(false);
-                 return; // Exit if not found
+                 return;
              }
-
             await leaveActivity(activity.id, participantToRemove);
             toast({ title: "Left Activity", description: `You have left "${activity.title}".` });
-             // Instead of reload, signal parent or update local state
-             window.location.reload();
-             // setNeedsRefresh(true); // Example of signaling parent
+            window.location.reload(); // Consider a more targeted refresh
         } catch (error) {
             console.error("Error leaving activity:", error);
             toast({ title: "Error", description: "Could not leave activity.", variant: "destructive" });
@@ -94,16 +83,13 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
       <CardHeader className="p-4 bg-muted/30 dark:bg-muted/10 border-b">
          <div className="flex items-center justify-between gap-4">
              <CardTitle className="text-lg">{activity.title}</CardTitle>
-              {/* Update link to use query parameter */}
               <Link href={`/activities/details?id=${activity.id}`} passHref>
                 <Button variant="ghost" size="sm" className="text-xs h-7">
                     Details
                     <ExternalLink className="ml-1 h-3 w-3"/>
                  </Button>
               </Link>
-
          </div>
-
         <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
              <Avatar className="h-6 w-6">
                 <AvatarImage src={activity.creatorPhotoURL ?? undefined} alt={activity.creatorName ?? 'Creator'} />
@@ -153,7 +139,6 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
                      </Tooltip>
                  )}
             </div>
-
         </div>
       </CardContent>
       <CardFooter className="p-4 bg-muted/30 dark:bg-muted/10 border-t">
@@ -171,7 +156,6 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
         )}
          {isCreator && (
              <p className="text-sm text-muted-foreground italic">You created this activity.</p>
-             // Optionally add Edit/Delete buttons here for the creator
         )}
       </CardFooter>
     </Card>

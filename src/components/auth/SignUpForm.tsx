@@ -1,3 +1,4 @@
+// src/components/auth/SignUpForm.tsx
 "use client";
 
 import React from 'react';
@@ -5,20 +6,20 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase/config'; // auth and db can be null
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from '@/lib/firebase/config';
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"; // Keep setDoc for user profile
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+// import { Label } from "@/components/ui/label"; // Not directly used
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
-import type { UserProfile, Invitation } from '@/lib/types';
-import { addFriend, deleteInvitation, getInvitation } from '@/lib/firebase/services'; // Import needed functions
+import type { UserProfile as FirestoreUserProfile, InvitationClient } from '@/lib/types'; // Use FirestoreUserProfile for creation
+import { addFriend, deleteInvitation, getInvitation, createUserProfile } from '@/lib/firebase/services';
 
 
 const formSchema = z.object({
@@ -31,7 +32,7 @@ const formSchema = z.object({
 export function SignUpForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const inviteCode = searchParams.get('invite'); // Get invite code from URL
+  const inviteCode = searchParams.get('invite');
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
@@ -46,7 +47,6 @@ export function SignUpForm() {
     },
   });
 
-  // Function to handle invite code after user creation/sign-in
   const handleInvite = async (userId: string, code: string) => {
       if (!db) {
           console.error("Firestore (db) is not initialized. Cannot handle invite.");
@@ -54,11 +54,16 @@ export function SignUpForm() {
           return;
       }
     try {
-      const invitation = await getInvitation(code); // getInvitation checks db
+      const invitation: InvitationClient | null = await getInvitation(code); // Returns InvitationClient
 
       if (!invitation) {
           toast({ title: "Invite Not Found", description: "The invite code is invalid or expired.", variant: "destructive" });
           return;
+      }
+       // Optional: Check invitation.expiresAt (string)
+       if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
+        return;
       }
 
       if (userId === invitation.inviterId) {
@@ -66,21 +71,17 @@ export function SignUpForm() {
            return;
       }
 
-        // Check if already friends before adding
        const friendRef = doc(db, `users/${userId}/friends/${invitation.inviterId}`);
        const friendSnap = await getDoc(friendRef);
 
         if (!friendSnap.exists()) {
-            await addFriend(userId, invitation.inviterId); // Add friendship in both directions
-            await addFriend(invitation.inviterId, userId);
-            await deleteInvitation(code); // Remove the used invitation
+            await addFriend(userId, invitation.inviterId);
+            await deleteInvitation(code);
             toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
         } else {
             toast({ title: "Already Friends", description: "You are already connected with this friend." });
-            // Optionally still delete the invitation if already friends
-            await deleteInvitation(code);
+            await deleteInvitation(code); // Still delete invite if already friends
         }
-
     } catch (error) {
       console.error("Error handling invite code:", error);
       toast({ title: "Invite Error", description: "Could not process the invite code.", variant: "destructive" });
@@ -97,31 +98,24 @@ export function SignUpForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
-      // Update Firebase Auth profile
       await updateProfile(user, { displayName: values.displayName });
 
-       // Create user profile document in Firestore
-        const userDocRef = doc(db, "users", user.uid);
-        const newUserProfile: UserProfile = {
-          uid: user.uid,
-          email: user.email,
-          displayName: values.displayName,
-          photoURL: user.photoURL, // Initially null for email/pass signup
-          childNickname: values.childNickname || '', // Use provided or empty string
-          createdAt: serverTimestamp(),
-        };
-        await setDoc(userDocRef, newUserProfile);
-
+      // Prepare data for FirestoreUserProfile (without createdAt, service adds it)
+      const newUserProfileData: Omit<FirestoreUserProfile, 'createdAt'> = {
+        uid: user.uid,
+        email: user.email,
+        displayName: values.displayName,
+        photoURL: user.photoURL,
+        childNickname: values.childNickname || '',
+      };
+      await createUserProfile(newUserProfileData); // createUserProfile handles serverTimestamp
 
       toast({ title: "Sign Up Successful", description: "Your account has been created." });
 
-      // Handle invite code if present
       if (inviteCode) {
           await handleInvite(user.uid, inviteCode);
       }
-
-
-      router.push('/dashboard'); // Redirect after signup
+      router.push('/dashboard');
     } catch (error: any) {
       console.error("Sign up error:", error);
        let description = "An unexpected error occurred. Please try again.";
@@ -153,34 +147,28 @@ export function SignUpForm() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Check if user profile exists, create if not
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-         const newUserProfile: UserProfile = {
+         const newUserProfileData: Omit<FirestoreUserProfile, 'createdAt'> = {
            uid: user.uid,
            email: user.email,
            displayName: user.displayName,
            photoURL: user.photoURL,
-           createdAt: serverTimestamp(),
-           childNickname: '', // Prompt user later or set default
+           childNickname: '',
          };
-         await setDoc(userDocRef, newUserProfile);
+         await createUserProfile(newUserProfileData);
          console.log("Created new user profile for Google Sign-In user:", user.uid);
       } else {
           console.log("User profile already exists for Google Sign-In user:", user.uid);
-          // Optionally update existing profile with latest Google data if needed
       }
 
       toast({ title: "Google Sign In Successful", description: `Welcome, ${user.displayName}!` });
 
-       // Handle invite code if present
       if (inviteCode) {
           await handleInvite(user.uid, inviteCode);
       }
-
-
       router.push('/dashboard');
     } catch (error: any) {
       console.error("Google Sign in error:", error);

@@ -1,19 +1,18 @@
 // src/app/(app)/activities/details/page.tsx
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react'; // Import Suspense
-import { useSearchParams, useRouter } from 'next/navigation'; // Use useSearchParams
+import React, { useEffect, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getActivity, joinActivity, leaveActivity, deleteActivity } from '@/lib/firebase/services';
-import type { Activity } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import type { ActivityClient } from '@/lib/types'; // Use ActivityClient
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-import { de } from 'date-fns/locale'; // Keep German locale for date formatting conventions
-import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ArrowLeft, FilePenLine, Trash2, Home } from 'lucide-react'; // Added Home icon
-import { Timestamp } from 'firebase/firestore';
+import { de } from 'date-fns/locale';
+import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ArrowLeft, FilePenLine, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
 import { ParticipantsList } from '@/components/activities/ParticipantsList';
@@ -29,12 +28,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-function ActivityDetailContent() { // Wrap content in a component for Suspense
-  const searchParams = useSearchParams(); // Use useSearchParams
+function ActivityDetailContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const activityId = searchParams.get('id'); // Get ID from query parameter
+  const activityId = searchParams.get('id');
   const { user, userProfile, loading: authLoading } = useAuth();
-  const [activity, setActivity] = useState<Activity | null>(null);
+  const [activity, setActivity] = useState<ActivityClient | null>(null); // Use ActivityClient
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -46,7 +45,7 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
     if (activityId) {
       setIsLoading(true);
       setError(null);
-      getActivity(activityId)
+      getActivity(activityId) // This now returns ActivityClient
         .then(data => {
           if (data) {
             setActivity(data);
@@ -78,8 +77,7 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
             };
             await joinActivity(activity.id, participantData);
             toast({ title: "Joined Activity!", description: `You have joined "${activity.title}".` });
-            // Re-fetch activity data to update the UI
-            const updatedActivity = await getActivity(activityId!); // Use non-null assertion as ID must exist here
+            const updatedActivity = await getActivity(activityId!);
             setActivity(updatedActivity);
         } catch (error) {
             console.error("Error joining activity:", error);
@@ -98,8 +96,7 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
 
             await leaveActivity(activity.id, participantToRemove);
             toast({ title: "Left Activity", description: `You have left "${activity.title}".` });
-             // Re-fetch activity data to update the UI
-             const updatedActivity = await getActivity(activityId!); // Use non-null assertion
+             const updatedActivity = await getActivity(activityId!);
              setActivity(updatedActivity);
         } catch (error) {
             console.error("Error leaving activity:", error);
@@ -115,7 +112,7 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
         try {
             await deleteActivity(activity.id);
             toast({ title: "Activity Deleted", description: `"${activity.title}" has been removed.` });
-            router.push('/dashboard'); // Redirect after successful deletion
+            router.push('/dashboard');
         } catch (err) {
             console.error("Error deleting activity:", err);
             toast({ title: "Error", description: "Could not delete activity.", variant: "destructive" });
@@ -124,7 +121,7 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
     };
 
 
-  if (isLoading || authLoading) { // Consider authLoading as well
+  if (isLoading || authLoading) {
     return <ActivityDetailSkeleton />;
   }
 
@@ -151,14 +148,15 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
                      Back to Dashboard
                 </Link>
              </Button>
-             <p className="text-center mt-10">Activity not found.</p>;
+             <p className="text-center mt-10">Activity not found.</p>
          </div>
      );
   }
 
-   const activityDate = activity.date instanceof Timestamp ? activity.date.toDate() : (activity.date instanceof Date ? activity.date : null);
-   const formattedDate = activityDate ? format(activityDate, "PPP", { locale: de }) : 'Date TBD';
-   const formattedTime = activityDate ? format(activityDate, "HH:mm", { locale: de }) : 'Time TBD';
+   // activity.date is now an ISO string, parse it to a Date object
+   const activityDate = activity.date ? new Date(activity.date) : null;
+   const formattedDate = activityDate && !isNaN(activityDate.getTime()) ? format(activityDate, "PPP", { locale: de }) : 'Date TBD';
+   const formattedTime = activityDate && !isNaN(activityDate.getTime()) ? format(activityDate, "HH:mm", { locale: de }) : 'Time TBD';
 
    const isCreator = activity.creatorId === user?.uid;
    const isParticipant = activity.participants.some(p => p.uid === user?.uid);
@@ -208,7 +206,6 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
             {isCreator && (
                  <div className="mr-auto flex gap-2">
                     <Button variant="outline" size="sm" asChild>
-                        {/* Link to edit page with query parameter */}
                         <Link href={`/activities/edit?id=${activity.id}`}>
                             <FilePenLine className="mr-1 h-4 w-4" /> Edit
                         </Link>
@@ -254,8 +251,6 @@ function ActivityDetailContent() { // Wrap content in a component for Suspense
   );
 }
 
-
-// Skeleton component remains the same
 function ActivityDetailSkeleton() {
     return (
          <div className="container mx-auto py-6 px-4 md:px-6 max-w-3xl">
@@ -285,7 +280,6 @@ function ActivityDetailSkeleton() {
     )
 }
 
-// Export the page component wrapped in Suspense
 export default function ActivityDetailPage() {
   return (
     <Suspense fallback={<ActivityDetailSkeleton />}>

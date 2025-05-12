@@ -1,38 +1,66 @@
 import type { Timestamp } from "firebase/firestore";
 
-export interface UserProfile {
+// --- Base types for re-use ---
+interface BaseUserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
   photoURL?: string | null;
-  childNickname?: string; // Optional child nickname
-  createdAt: Timestamp;
-  // Add other profile fields as needed
+  childNickname?: string;
 }
 
-export interface Activity {
+interface BaseActivity {
   id: string;
   title: string;
-  date: Timestamp; // Store date and time together
-  location?: string | null; // Optional location, allow null
+  location?: string | null;
   creatorId: string;
-  creatorName: string; // Denormalized for easy display
-  creatorPhotoURL?: string | null; // Denormalized
-  participants: { uid: string; name: string | null, photoURL?: string | null }[]; // List of participants
+  creatorName: string;
+  creatorPhotoURL?: string | null;
+  participants: { uid: string; name: string | null, photoURL?: string | null }[];
+}
+
+interface BaseInvitation {
+  code: string;
+  inviterId: string;
+  inviterName: string | null;
+}
+
+// --- Types for data as stored in/retrieved from Firestore ---
+
+export interface UserProfile extends BaseUserProfile {
   createdAt: Timestamp;
 }
+
+export interface Activity extends BaseActivity {
+  date: Timestamp;
+  createdAt: Timestamp;
+}
+
+export interface Invitation extends BaseInvitation {
+  createdAt: Timestamp;
+  expiresAt?: Timestamp;
+}
+
+// --- Types for data prepared for client-side consumption (Timestamps are ISO strings) ---
+
+export interface UserProfileClient extends BaseUserProfile {
+  createdAt: string; // ISO Date string
+}
+
+export interface ActivityClient extends BaseActivity {
+  date: string; // ISO Date string
+  createdAt: string; // ISO Date string
+}
+
+export interface InvitationClient extends BaseInvitation {
+  createdAt: string; // ISO Date string
+  expiresAt?: string; // ISO Date string or undefined
+}
+
+// --- Other types ---
 
 export interface Friend {
     uid: string;
     displayName: string | null;
     photoURL?: string | null;
-    // Add other relevant friend details if needed
-}
-
-export interface Invitation {
-  code: string;
-  inviterId: string;
-  inviterName: string | null;
-  createdAt: Timestamp;
-  expiresAt?: Timestamp; // Optional expiry
 }

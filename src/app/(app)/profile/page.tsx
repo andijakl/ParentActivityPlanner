@@ -10,22 +10,23 @@ import { updateUserProfile } from '@/lib/firebase/services';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"; // Added FormDescription
+// import { Label } from '@/components/ui/label'; // Not directly used
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+// Form data does not include 'createdAt' or 'uid' or 'email' as they are not directly editable here.
 const profileSchema = z.object({
   displayName: z.string().min(2, { message: "Name must be at least 2 characters." }).max(50),
   childNickname: z.string().max(50).optional(),
-  // email cannot be changed here, it's managed via Firebase Auth methods if needed
+  // photoURL can be part of UserProfile, but typically handled via file upload separately
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export default function ProfilePage() {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth(); // userProfile is UserProfileClient
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -37,24 +38,19 @@ export default function ProfilePage() {
     },
   });
 
-   // Populate form once userProfile is loaded
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile) { // userProfile.createdAt is already an ISO string
       form.reset({
         displayName: userProfile.displayName ?? '',
         childNickname: userProfile.childNickname ?? '',
       });
-    }
-     // Handle case where user exists but profile is somehow null (e.g., creation failed)
-     else if (user && !authLoading) {
-         // Maybe set defaults from auth user if profile is missing
+    } else if (user && !authLoading) {
          form.reset({
              displayName: user.displayName ?? '',
              childNickname: '',
          });
          console.warn("User profile data is missing, using auth display name as default.");
      }
-
   }, [userProfile, user, authLoading, form]);
 
 
@@ -62,13 +58,18 @@ export default function ProfilePage() {
     if (!user) return;
     setIsLoading(true);
     try {
-      await updateUserProfile(user.uid, data);
+      // updateUserProfile expects data that matches parts of UserProfile (Firestore version)
+      // but only specific fields like displayName, childNickname.
+      // The service function is already adapted to handle Omit<UserProfile, 'createdAt' | 'uid' | 'email'>
+      await updateUserProfile(user.uid, {
+          displayName: data.displayName,
+          childNickname: data.childNickname
+      });
       toast({
         title: "Profile Updated",
         description: "Your profile information has been saved.",
       });
-      // Optionally force refresh context if local update isn't sufficient
-      // window.location.reload(); // Or use a more sophisticated state management update
+      // AuthContext will re-fetch or update userProfile if needed, or rely on Firebase's onAuthStateChanged
     } catch (error) {
       console.error("Error updating profile:", error);
       toast({
@@ -91,9 +92,9 @@ export default function ProfilePage() {
   };
 
 
-   if (authLoading || (!userProfile && user)) { // Show loading if auth is loading OR user exists but profile isn't loaded yet
+   if (authLoading || (!userProfile && user)) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 container mx-auto py-6 px-4 md:px-6 max-w-2xl">
          <Skeleton className="h-10 w-48" />
          <Skeleton className="h-8 w-64" />
          <Card>
@@ -114,10 +115,8 @@ export default function ProfilePage() {
   }
 
    if (!user) {
-     // This case should ideally be handled by the AuthProviderComponent redirecting
      return <p>Please sign in to view your profile.</p>;
    }
-
 
   return (
     <div className="container mx-auto py-6 px-4 md:px-6 max-w-2xl">
@@ -137,7 +136,6 @@ export default function ProfilePage() {
                  </div>
             </div>
              <p className="text-sm text-muted-foreground">Manage your account details below.</p>
-
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -162,7 +160,7 @@ export default function ProfilePage() {
                   <FormItem>
                     <FormLabel>Child's Nickname (Optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Little Adventurer" {...field} disabled={isLoading} />
+                      <Input placeholder="e.g., Little Adventurer" {...field} value={field.value ?? ""} onChange={field.onChange} disabled={isLoading} />
                     </FormControl>
                      <FormDescription>
                         This helps identify your child in activities (visible to friends).
@@ -177,7 +175,7 @@ export default function ProfilePage() {
                     <Input value={user.email ?? 'No email provided'} disabled readOnly />
                   </FormControl>
                   <FormDescription>
-                    Email cannot be changed here. Use account settings if needed (feature not implemented).
+                    Email cannot be changed here.
                   </FormDescription>
               </FormItem>
               <Button type="submit" disabled={isLoading}>

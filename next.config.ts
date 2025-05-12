@@ -1,7 +1,6 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  output: 'export', // Enable static export for Firebase Hosting (basic)
   images: {
     unoptimized: true, // Required for static export when using next/image
     remotePatterns: [
@@ -26,10 +25,6 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Optional: If using static export and have dynamic routes like /invite/[code]
-  // you might need to configure generateStaticParams if you know the codes beforehand,
-  // or handle them purely client-side after redirecting to a generic invite page.
-  // For dynamic invite codes, client-side handling is more practical.
 };
 
 export default nextConfig;

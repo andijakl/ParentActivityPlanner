@@ -15,20 +15,34 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp | null = null;
-let authInstance: Auth | null = null;
-let dbInstance: Firestore | null = null;
-let firebaseInitializationError: Error | null = null; // Added to store initialization error
+let authInstance: Auth | null = null; // Renamed internal variable
+let dbInstance: Firestore | null = null; // Renamed internal variable
+let firebaseInitializationError: Error | null = null;
 
 // Function to check if Firebase essential config is provided
 export const isFirebaseConfigured = (): boolean => !!firebaseConfig.apiKey && !!firebaseConfig.authDomain && !!firebaseConfig.projectId;
 
-// Initialize Firebase
-if (!isFirebaseConfigured()) {
-  const errorMessage = "Firebase configuration is missing essential values (apiKey, authDomain, projectId). Please check your .env.local file and ensure NEXT_PUBLIC_FIREBASE_* variables are set correctly. Firebase services will not be initialized.";
-  console.error(errorMessage);
-  firebaseInitializationError = new Error(errorMessage);
-} else {
+// Centralized initialization function
+function initializeFirebase() {
+  // Avoid re-initializing if already successfully initialized
+  if (app) return;
+
+  // Clear previous errors before attempting initialization
+  firebaseInitializationError = null;
+
+  if (!isFirebaseConfigured()) {
+    const errorMessage = "Firebase configuration is missing essential values (apiKey, authDomain, projectId). Please check your .env.local file and ensure NEXT_PUBLIC_FIREBASE_* variables are set correctly. Firebase services will not be initialized.";
+    console.error(errorMessage);
+    firebaseInitializationError = new Error(errorMessage);
+    // Ensure instances remain null
+    app = null;
+    authInstance = null;
+    dbInstance = null;
+    return; // Exit early
+  }
+
   try {
+    // Ensure no race conditions with multiple initializations (relevant for HMR)
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
       console.log("Firebase initialized successfully.");
@@ -38,25 +52,32 @@ if (!isFirebaseConfigured()) {
     }
 
     if (app) {
+      // Only assign to internal variables if successful
       authInstance = getAuth(app);
       dbInstance = getFirestore(app);
+      console.log("Firebase Auth and Firestore services obtained.");
     } else {
-      const errorMessage = "Firebase app instance is null after attempting initialization.";
-      console.error(errorMessage);
-       firebaseInitializationError = new Error(errorMessage);
+      // This case should technically not happen if getApp() or initializeApp() succeeded,
+      // but added for robustness.
+      throw new Error("Firebase app instance is unexpectedly null after initialization attempt.");
     }
   } catch (error) {
-    console.error("Error initializing Firebase:", error);
+    console.error("Error initializing Firebase services:", error);
     firebaseInitializationError = error instanceof Error ? error : new Error(String(error));
+    // Ensure instances are null on failure
     app = null;
     authInstance = null;
     dbInstance = null;
   }
 }
 
+// Call initialization logic immediately when the module loads.
+// This ensures it runs once per environment (server/client) upon first import.
+initializeFirebase();
+
+// Export the potentially null instances and the error state.
+// Consumers MUST check for null before using auth or db.
 const auth = authInstance;
 const db = dbInstance;
 
-// Export potentially null values and the error state.
-// Components using these need to handle the null case.
 export { app, auth, db, firebaseInitializationError };

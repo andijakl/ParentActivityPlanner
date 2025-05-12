@@ -47,6 +47,11 @@ Built with Next.js, TypeScript, Tailwind CSS, ShadCN UI, and Firebase.
     *   In the Firebase project console, navigate to "Authentication".
     *   Click "Get started".
     *   Enable the "Email/Password" and "Google" sign-in methods.
+    *   **Authorize Domains**:
+        *   Still in the Authentication section, go to the "Settings" tab.
+        *   Under "Authorized domains", click "Add domain".
+        *   Add `localhost` (this is crucial for local development). If your app runs on a specific port like `localhost:9002` and you still face issues, ensure `localhost` is sufficient. Firebase usually treats `localhost` broadly for development.
+        *   If deploying to a custom domain later, add that domain here as well.
 3.  **Enable Firestore Database**:
     *   Navigate to "Firestore Database".
     *   Click "Create database".
@@ -125,34 +130,65 @@ Upload these rules via the Firebase Console ("Firestore Database" > "Rules" tab)
 
 ## Deployment
 
-### Prerequisites
+This project can be deployed using different methods. The `next.config.ts` is currently set up for Server-Side Rendering (SSR) or a hybrid approach. If you wish to deploy as a static site, you'll need to enable `output: 'export'` in `next.config.ts`.
 
-- Firebase CLI: Install via `npm install -g firebase-tools`
-- Login to Firebase: `firebase login`
+### Option 1: SSR with Firebase Hosting and Cloud Functions (Recommended for full features)
 
-### Configuration
+For SSR, you'll typically deploy your Next.js app to Cloud Functions and use Firebase Hosting to serve it.
 
-1.  **Initialize Firebase Hosting:**
+1.  **Initialize Firebase Functions:**
+    ```bash
+    firebase init functions
+    ```
+    *   Choose TypeScript.
+    *   Install dependencies with npm when prompted.
+
+2.  **Initialize Firebase Hosting (if not already done for SSR):**
     ```bash
     firebase init hosting
     ```
-    *   Select "Use an existing project" and choose your Firebase project.
-    *   Set your public directory to `out`. **Important**: Next.js static export outputs to the `out` directory by default.
-    *   Configure as a single-page app (SPA): **Yes** (This helps with client-side routing).
-    *   Set up automatic builds and deploys with GitHub: **No** (You can set this up later if needed).
-    *   File `out/index.html` already exists. Overwrite? **No**.
+    *   Select "Use an existing project".
+    *   For your public directory, you can point it to a placeholder or leave it as `public` initially. The main serving will be handled by the function rewrite.
+    *   Configure as a single-page app: No (unless you have specific SPA parts not handled by Next.js SSR).
+    *   Set up automatic builds with GitHub: Optional.
 
-2.  **Update `next.config.ts` for Static Export (if not already configured):**
-    Ensure your `next.config.ts` includes `output: 'export'` for static builds compatible with Firebase Hosting's basic tier:
+3.  **Modify `firebase.json` for SSR:**
+    Your `firebase.json` should look something like this to rewrite all requests to your Next.js Cloud Function:
+    ```json
+    {
+      "hosting": {
+        "public": "public", // Or your chosen static assets folder, if any
+        "ignore": [
+          "firebase.json",
+          "**/.*",
+          "**/node_modules/**"
+        ],
+        "rewrites": [
+          {
+            "source": "**",
+            "function": "nextServer" // Replace "nextServer" with your function's name
+          }
+        ]
+      },
+      "functions": [ // Or functions.source if using a single function entry point
+        {
+          "source": "functions", // Or your functions directory
+          "codebase": "default",
+          "runtime": "nodejs18" // Or your preferred runtime
+        }
+      ]
+    }
+    ```
+    *   You'll need to create a Firebase Function (e.g., `nextServer`) that serves your Next.js app. Framework-aware CLI might handle this (e.g., `firebase deploy --only hosting,functions`). Refer to Firebase documentation for deploying Next.js SSR applications.
 
+4.  **Update `next.config.ts` (ensure `output: 'export'` is NOT set):**
     ```ts
     import type {NextConfig} from 'next';
 
     const nextConfig: NextConfig = {
-      output: 'export', // Add this line for static export
-      // ... other config options
+      // output: 'export', // Make sure this is commented out or removed for SSR
       images: {
-        unoptimized: true, // Required for static export if using next/image
+        unoptimized: false, // Can be false for SSR if using next/image optimization
         remotePatterns: [
           {
             protocol: 'https',
@@ -160,7 +196,6 @@ Upload these rules via the Firebase Console ("Firestore Database" > "Rules" tab)
             port: '',
             pathname: '/**',
           },
-          // Add other domains if needed, e.g., Google profile pictures
           {
             protocol: 'https',
             hostname: 'lh3.googleusercontent.com',
@@ -177,35 +212,80 @@ Upload these rules via the Firebase Console ("Firestore Database" > "Rules" tab)
 
     export default nextConfig;
     ```
-    *Note: If using dynamic features like Server Components or Server Actions extensively, you might need Firebase Functions (Cloud Functions for Firebase) integration, which involves a different setup (`firebase init functions` and adjusting the `firebase.json` rewrite rules).*
 
-### Build the Application
+5.  **Build and Deploy:**
+    ```bash
+    npm run build
+    firebase deploy --only hosting,functions
+    ```
 
-```bash
-npm run build
-# or
-yarn build
-# or
-pnpm build
-```
+### Option 2: Static Export to Firebase Hosting (Simpler, but limitations)
 
-This command will generate the static site in the `out` directory.
+If you prefer a fully static site (limitations with dynamic server-side features):
 
-### Deploy to Firebase Hosting
+1.  **Update `next.config.ts` for Static Export:**
+    ```ts
+    import type {NextConfig} from 'next';
 
-```bash
-firebase deploy --only hosting
-```
+    const nextConfig: NextConfig = {
+      output: 'export', // Add this line for static export
+      images: {
+        unoptimized: true, // Required for static export if using next/image
+        remotePatterns: [ /* ... as above ... */ ],
+      },
+      typescript: { ignoreBuildErrors: true },
+      eslint: { ignoreDuringBuilds: true },
+    };
 
-After deployment, the Firebase CLI will provide the URL for your live application.
+    export default nextConfig;
+    ```
+
+2.  **Initialize Firebase Hosting (for static site):**
+    ```bash
+    firebase init hosting
+    ```
+    *   Select "Use an existing project".
+    *   Set your public directory to `out`. **Important**: Next.js static export outputs to the `out` directory.
+    *   Configure as a single-page app (SPA): **Yes**.
+    *   Set up automatic builds with GitHub: Optional.
+
+3.  **Update `firebase.json` for Static Site:**
+    ```json
+    {
+      "hosting": {
+        "public": "out", // Points to Next.js static export directory
+        "ignore": [
+          "firebase.json",
+          "**/.*",
+          "**/node_modules/**"
+        ],
+        "rewrites": [
+          {
+            "source": "**",
+            "destination": "/index.html" // For SPA behavior
+          }
+        ]
+      }
+    }
+    ```
+
+4.  **Build the Application:**
+    ```bash
+    npm run build
+    ```
+    This command will generate the static site in the `out` directory.
+
+5.  **Deploy to Firebase Hosting:**
+    ```bash
+    firebase deploy --only hosting
+    ```
 
 ### Continuous Deployment (CI/CD) - Example with GitHub Actions
 
-1.  **Create a GitHub Actions workflow file:**
-    *   Create `.github/workflows/firebase-deploy.yml` in your project.
+This example is for a **static export deployment**. Adjust for SSR if needed.
 
+1.  **Create a GitHub Actions workflow file:** `.github/workflows/firebase-deploy.yml`
 2.  **Add the following workflow configuration:**
-
     ```yaml
     name: Deploy to Firebase Hosting on merge
 
@@ -229,19 +309,18 @@ After deployment, the Firebase CLI will provide the URL for your live applicatio
           - name: Install dependencies
             run: npm install # or yarn install / pnpm install
 
-          # Create .env.local from GitHub Secrets
           - name: Create .env.local
             run: |
               echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" >> .env.local
               echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> .env.local
               echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> .env.local
-              echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> .env.local
-              echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> .env.local
-              echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" >> .env.local
-              echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}" >> .env.local
+              # ... add all other NEXT_PUBLIC_FIREBASE_ variables
+            env:
+              NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+              # ... list all secrets here to make them available to the run step
 
-          - name: Build project
-            run: npm run build # or yarn build / pnpm build
+          - name: Build project (for static export)
+            run: npm run build # This should generate the 'out' folder
 
           - name: Deploy to Firebase Hosting
             uses: FirebaseExtended/action-hosting-deploy@v0
@@ -250,16 +329,8 @@ After deployment, the Firebase CLI will provide the URL for your live applicatio
               firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ACTIVITY_HUB }}' # Service account JSON
               channelId: live
               projectId: your-firebase-project-id # Replace with your Firebase project ID
+              # Ensure this deploys the 'out' directory if using static export
     ```
+3.  **Add Secrets to GitHub Repository** (as described previously).
 
-3.  **Add Secrets to GitHub Repository:**
-    *   Go to your GitHub repository -> Settings -> Secrets and variables -> Actions.
-    *   Add secrets for all your `NEXT_PUBLIC_FIREBASE_` variables from your `.env.local` file.
-    *   Add a secret named `FIREBASE_SERVICE_ACCOUNT_ACTIVITY_HUB`:
-        *   Go to your Firebase Project Settings -> Service accounts.
-        *   Generate a new private key (JSON file).
-        *   Copy the entire contents of the downloaded JSON file and paste it as the value for the `FIREBASE_SERVICE_ACCOUNT_ACTIVITY_HUB` secret.
-    *   Replace `your-firebase-project-id` in the workflow file with your actual Firebase project ID.
-
-Now, every time you push/merge to the `main` branch, GitHub Actions will automatically build and deploy your application to Firebase Hosting.
-```
+Choose the deployment option that best suits your needs. SSR offers more flexibility, while static export is simpler for basic sites.

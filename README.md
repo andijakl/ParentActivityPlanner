@@ -130,34 +130,43 @@ Upload these rules via the Firebase Console ("Firestore Database" > "Rules" tab)
 
 ## Deployment
 
-This project can be deployed using different methods. The `next.config.ts` is currently set up for Server-Side Rendering (SSR) or a hybrid approach. If you wish to deploy as a static site, you'll need to enable `output: 'export'` in `next.config.ts`.
+This project uses dynamic routes (e.g., `/activities/[id]`) and therefore **cannot** be deployed using Next.js static export (`output: 'export'`). You need a hosting provider that supports Next.js Server-Side Rendering (SSR) or Incremental Static Regeneration (ISR).
 
-### Option 1: SSR with Firebase Hosting and Cloud Functions (Recommended for full features)
+**Recommended Deployment Options:**
 
-For SSR, you'll typically deploy your Next.js app to Cloud Functions and use Firebase Hosting to serve it.
+*   **Vercel (Recommended for Next.js):** Vercel is the platform built by the creators of Next.js and offers seamless deployment. Connect your Git repository, and Vercel will handle the build and deployment automatically.
+*   **Netlify:** Netlify also provides excellent support for Next.js applications, including SSR and ISR features.
+*   **Firebase Hosting + Cloud Functions (SSR):** You can deploy the Next.js application as a Node.js server within a Firebase Cloud Function and use Firebase Hosting to serve the function. This requires more setup than Vercel or Netlify.
+*   **Other Node.js Hosting:** Platforms like Google Cloud Run, AWS Lambda, Heroku, or DigitalOcean can host the Next.js Node.js server.
 
-1.  **Initialize Firebase Functions:**
+**Example Setup: Firebase Hosting + Cloud Functions (SSR)**
+
+This is a more involved setup compared to Vercel/Netlify.
+
+1.  **Ensure `output: 'export'` is NOT in `next.config.ts`:** The `next.config.ts` should *not* contain the `output: 'export'` line.
+
+2.  **Initialize Firebase Functions:**
     ```bash
     firebase init functions
     ```
     *   Choose TypeScript.
     *   Install dependencies with npm when prompted.
+    *   Structure your functions code to serve the Next.js app (refer to Firebase documentation for deploying Next.js apps). You might need a `functions/src/index.ts` that imports and runs your Next.js server.
 
-2.  **Initialize Firebase Hosting (if not already done for SSR):**
+3.  **Initialize Firebase Hosting (if not already done):**
     ```bash
     firebase init hosting
     ```
     *   Select "Use an existing project".
-    *   For your public directory, you can point it to a placeholder or leave it as `public` initially. The main serving will be handled by the function rewrite.
-    *   Configure as a single-page app: No (unless you have specific SPA parts not handled by Next.js SSR).
-    *   Set up automatic builds with GitHub: Optional.
+    *   Point to a public directory (e.g., `public`). Static assets handled by Next.js itself can go here, but the main serving happens via the function.
+    *   Configure as a single-page app: No.
 
-3.  **Modify `firebase.json` for SSR:**
-    Your `firebase.json` should look something like this to rewrite all requests to your Next.js Cloud Function:
+4.  **Modify `firebase.json` for SSR Rewrite:**
+    Update your `firebase.json` to rewrite all requests to your Cloud Function:
     ```json
     {
       "hosting": {
-        "public": "public", // Or your chosen static assets folder, if any
+        "public": "public", // Or your chosen static assets folder
         "ignore": [
           "firebase.json",
           "**/.*",
@@ -170,47 +179,15 @@ For SSR, you'll typically deploy your Next.js app to Cloud Functions and use Fir
           }
         ]
       },
-      "functions": [ // Or functions.source if using a single function entry point
+      "functions": [
         {
           "source": "functions", // Or your functions directory
           "codebase": "default",
           "runtime": "nodejs18" // Or your preferred runtime
+          // Add necessary configurations for memory, region, etc.
         }
       ]
     }
-    ```
-    *   You'll need to create a Firebase Function (e.g., `nextServer`) that serves your Next.js app. Framework-aware CLI might handle this (e.g., `firebase deploy --only hosting,functions`). Refer to Firebase documentation for deploying Next.js SSR applications.
-
-4.  **Update `next.config.ts` (ensure `output: 'export'` is NOT set):**
-    ```ts
-    import type {NextConfig} from 'next';
-
-    const nextConfig: NextConfig = {
-      // output: 'export', // Make sure this is commented out or removed for SSR
-      images: {
-        unoptimized: false, // Can be false for SSR if using next/image optimization
-        remotePatterns: [
-          {
-            protocol: 'https',
-            hostname: 'picsum.photos',
-            port: '',
-            pathname: '/**',
-          },
-          {
-            protocol: 'https',
-            hostname: 'lh3.googleusercontent.com',
-          }
-        ],
-      },
-      typescript: {
-        ignoreBuildErrors: true,
-      },
-      eslint: {
-        ignoreDuringBuilds: true,
-      },
-    };
-
-    export default nextConfig;
     ```
 
 5.  **Build and Deploy:**
@@ -219,118 +196,15 @@ For SSR, you'll typically deploy your Next.js app to Cloud Functions and use Fir
     firebase deploy --only hosting,functions
     ```
 
-### Option 2: Static Export to Firebase Hosting (Simpler, but limitations)
+**Continuous Deployment (CI/CD) - Example with GitHub Actions for Vercel/Netlify:**
 
-If you prefer a fully static site (limitations with dynamic server-side features):
+Most modern platforms integrate directly with Git providers.
 
-1.  **Update `next.config.ts` for Static Export:**
-    ```ts
-    import type {NextConfig} from 'next';
+1.  **Push your code** to a GitHub/GitLab/Bitbucket repository.
+2.  **Connect your repository** to Vercel or Netlify via their dashboards.
+3.  **Configure build settings** (usually detected automatically for Next.js).
+4.  **Set Environment Variables** (like your `NEXT_PUBLIC_FIREBASE_*` keys) in the Vercel/Netlify project settings.
+5.  **Deployments will trigger automatically** on pushes to your main branch (or configured branches).
 
-    const nextConfig: NextConfig = {
-      output: 'export', // Add this line for static export
-      images: {
-        unoptimized: true, // Required for static export if using next/image
-        remotePatterns: [ /* ... as above ... */ ],
-      },
-      typescript: { ignoreBuildErrors: true },
-      eslint: { ignoreDuringBuilds: true },
-    };
-
-    export default nextConfig;
-    ```
-
-2.  **Initialize Firebase Hosting (for static site):**
-    ```bash
-    firebase init hosting
-    ```
-    *   Select "Use an existing project".
-    *   Set your public directory to `out`. **Important**: Next.js static export outputs to the `out` directory.
-    *   Configure as a single-page app (SPA): **Yes**.
-    *   Set up automatic builds with GitHub: Optional.
-
-3.  **Update `firebase.json` for Static Site:**
-    ```json
-    {
-      "hosting": {
-        "public": "out", // Points to Next.js static export directory
-        "ignore": [
-          "firebase.json",
-          "**/.*",
-          "**/node_modules/**"
-        ],
-        "rewrites": [
-          {
-            "source": "**",
-            "destination": "/index.html" // For SPA behavior
-          }
-        ]
-      }
-    }
-    ```
-
-4.  **Build the Application:**
-    ```bash
-    npm run build
-    ```
-    This command will generate the static site in the `out` directory.
-
-5.  **Deploy to Firebase Hosting:**
-    ```bash
-    firebase deploy --only hosting
-    ```
-
-### Continuous Deployment (CI/CD) - Example with GitHub Actions
-
-This example is for a **static export deployment**. Adjust for SSR if needed.
-
-1.  **Create a GitHub Actions workflow file:** `.github/workflows/firebase-deploy.yml`
-2.  **Add the following workflow configuration:**
-    ```yaml
-    name: Deploy to Firebase Hosting on merge
-
-    on:
-      push:
-        branches:
-          - main # Or your default branch
-
-    jobs:
-      build_and_deploy:
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout code
-            uses: actions/checkout@v4
-
-          - name: Set up Node.js
-            uses: actions/setup-node@v4
-            with:
-              node-version: '18' # Match your development environment
-
-          - name: Install dependencies
-            run: npm install # or yarn install / pnpm install
-
-          - name: Create .env.local
-            run: |
-              echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" >> .env.local
-              echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> .env.local
-              echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> .env.local
-              # ... add all other NEXT_PUBLIC_FIREBASE_ variables
-            env:
-              NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
-              # ... list all secrets here to make them available to the run step
-
-          - name: Build project (for static export)
-            run: npm run build # This should generate the 'out' folder
-
-          - name: Deploy to Firebase Hosting
-            uses: FirebaseExtended/action-hosting-deploy@v0
-            with:
-              repoToken: '${{ secrets.GITHUB_TOKEN }}'
-              firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ACTIVITY_HUB }}' # Service account JSON
-              channelId: live
-              projectId: your-firebase-project-id # Replace with your Firebase project ID
-              # Ensure this deploys the 'out' directory if using static export
-    ```
-3.  **Add Secrets to GitHub Repository** (as described previously).
-
-Choose the deployment option that best suits your needs. SSR offers more flexibility, while static export is simpler for basic sites.
+Choose the deployment option that best suits your needs and technical comfort level. Vercel or Netlify are generally the easiest for Next.js applications.
+```

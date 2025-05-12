@@ -1,9 +1,9 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  output: 'export', // Add this line for static export
+  // output: 'export', // Removed: Static export conflicts with dynamic routes like /activities/[id]
   images: {
-    unoptimized: true, // Required for static export if using next/image
+    unoptimized: false, // Set to false for SSR/ISR builds with optimized images
     remotePatterns: [
       {
         protocol: 'https',

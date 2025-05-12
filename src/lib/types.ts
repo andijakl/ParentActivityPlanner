@@ -14,7 +14,7 @@ export interface Activity {
   id: string;
   title: string;
   date: Timestamp; // Store date and time together
-  location?: string; // Optional location
+  location?: string | null; // Optional location, allow null
   creatorId: string;
   creatorName: string; // Denormalized for easy display
   creatorPhotoURL?: string | null; // Denormalized

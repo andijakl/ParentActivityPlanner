@@ -80,8 +80,8 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
         const activityData: Omit<Activity, 'id' | 'createdAt'> = {
             title: values.title,
             date: Timestamp.fromDate(combinedDateTime), // Convert to Firestore Timestamp
-            location: values.location || undefined, // Store as undefined if empty
-            // description: values.description || undefined,
+            location: values.location || null, // Store as null if empty/falsy (Firestore doesn't accept undefined)
+            // description: values.description || null,
             creatorId: user.uid,
             creatorName: userProfile.displayName ?? user.displayName ?? 'Unknown User',
             creatorPhotoURL: userProfile.photoURL ?? user.photoURL,
@@ -157,6 +157,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                               "w-full pl-3 text-left font-normal",
                               !field.value && "text-muted-foreground"
                             )}
+                            disabled={isLoading}
                           >
                             {field.value ? (
                               format(field.value, "PPP") // More readable format like "Sep 20, 2023"

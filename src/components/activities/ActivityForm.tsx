@@ -1,3 +1,4 @@
+// src/components/activities/ActivityForm.tsx
 "use client";
 
 import React from 'react';
@@ -11,7 +12,7 @@ import { format, parseISO, setHours, setMinutes, setSeconds, setMilliseconds } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea"; // Import Textarea if using it for description
+import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -19,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from '@/context/AuthContext';
-import { createActivity } from '@/lib/firebase/services'; // Assuming updateActivity exists too
+import { createActivity, updateActivity } from '@/lib/firebase/services';
 import type { Activity } from '@/lib/types';
 
 
@@ -27,16 +28,15 @@ const formSchema = z.object({
   title: z.string().min(3, { message: "Title must be at least 3 characters." }).max(100),
   date: z.date({ required_error: "A date is required." }),
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)."}), // HH:mm format
-  location: z.string().max(100).optional(),
-  // description: z.string().max(500).optional(), // Optional description field
+  location: z.string().max(100).optional().nullable(),
+  // description: z.string().max(500).optional().nullable(),
 });
 
 type ActivityFormData = z.infer<typeof formSchema>;
 
 interface ActivityFormProps {
-  // Pass activity data if editing, otherwise null/undefined for creation
   activity?: Activity | null;
-  onFormSubmit?: (activityId: string) => void; // Callback after successful submit
+  onFormSubmit?: (activityId: string) => void;
 }
 
 export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
@@ -64,53 +64,60 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
 
   async function onSubmit(values: ActivityFormData) {
      if (!user || !userProfile) {
-        toast({ title: "Authentication Error", description: "You must be logged in to create an activity.", variant: "destructive"});
+        toast({ title: "Authentication Error", description: "You must be logged in to manage activities.", variant: "destructive"});
         return;
      }
     setIsLoading(true);
 
     try {
-        // Combine date and time into a single Date object
         const [hours, minutes] = values.time.split(':').map(Number);
         let combinedDateTime = setHours(values.date, hours);
         combinedDateTime = setMinutes(combinedDateTime, minutes);
-        combinedDateTime = setSeconds(combinedDateTime, 0); // Reset seconds/milliseconds
+        combinedDateTime = setSeconds(combinedDateTime, 0);
         combinedDateTime = setMilliseconds(combinedDateTime, 0);
 
-        const activityData: Omit<Activity, 'id' | 'createdAt'> = {
+        const activityPayload = {
             title: values.title,
-            date: Timestamp.fromDate(combinedDateTime), // Convert to Firestore Timestamp
-            location: values.location || null, // Store as null if empty/falsy
+            date: Timestamp.fromDate(combinedDateTime),
+            location: values.location || null,
             // description: values.description || null,
-            creatorId: user.uid,
-            creatorName: userProfile.displayName ?? user.displayName ?? 'Unknown User',
-            creatorPhotoURL: userProfile.photoURL ?? user.photoURL,
-            participants: [ // Creator automatically joins
-                {
-                    uid: user.uid,
-                    name: userProfile.displayName ?? user.displayName,
-                    photoURL: userProfile.photoURL ?? user.photoURL,
-                }
-            ],
         };
 
         let activityId: string;
+
         if (isEditing && activity) {
-            // TODO: Implement updateActivity function in services.ts
-            // await updateActivity(activity.id, activityData);
-             activityId = activity.id;
-             toast({ title: "Activity Updated", description: `"${values.title}" has been updated.` });
+            // For updates, we only pass the fields that can be changed
+            await updateActivity(activity.id, activityPayload);
+            activityId = activity.id;
+            toast({ title: "Activity Updated", description: `"${values.title}" has been updated.` });
         } else {
-            activityId = await createActivity(activityData);
-             toast({ title: "Activity Created", description: `"${values.title}" has been scheduled.` });
+            // For creation, include creator and initial participant info
+            const creationData: Omit<Activity, 'id' | 'createdAt'> = {
+                ...activityPayload,
+                creatorId: user.uid,
+                creatorName: userProfile.displayName ?? user.displayName ?? 'Unknown User',
+                creatorPhotoURL: userProfile.photoURL ?? user.photoURL,
+                participants: [
+                    {
+                        uid: user.uid,
+                        name: userProfile.displayName ?? user.displayName,
+                        photoURL: userProfile.photoURL ?? user.photoURL,
+                    }
+                ],
+            };
+            activityId = await createActivity(creationData);
+            toast({ title: "Activity Created", description: `"${values.title}" has been scheduled.` });
         }
 
          if (onFormSubmit) {
-             onFormSubmit(activityId); // Call callback if provided
+             onFormSubmit(activityId);
          } else {
-             router.push(`/dashboard`); // Redirect to dashboard page
+             if (isEditing) {
+                 router.push(`/activities/${activityId}`); // Redirect to detail page after edit
+             } else {
+                 router.push('/dashboard'); // Redirect to dashboard after create
+             }
          }
-
 
     } catch (error: any) {
       console.error("Error saving activity:", error);
@@ -160,7 +167,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                             disabled={isLoading}
                           >
                             {field.value ? (
-                              format(field.value, "PPP") // More readable format like "Sep 20, 2023"
+                              format(field.value, "PPP")
                             ) : (
                               <span>Pick a date</span>
                             )}
@@ -173,7 +180,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
-                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading } // Disable past dates
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading }
                           initialFocus
                         />
                       </PopoverContent>
@@ -206,32 +213,12 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
             <FormItem>
               <FormLabel>Location (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Central Park Playground, Science Museum Cafe" {...field} disabled={isLoading} />
+                <Input placeholder="e.g., Central Park Playground, Science Museum Cafe" {...field} value={field.value ?? ""} disabled={isLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-
-         {/* Optional Description Field
-         <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description (Optional)</FormLabel>
-              <FormControl>
-                 <Textarea
-                    placeholder="Add any extra details, like what to bring or meeting point..."
-                    className="resize-none" // Prevent resizing
-                    {...field}
-                    disabled={isLoading}
-                 />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        /> */}
 
         <Button type="submit" disabled={isLoading} className="w-full md:w-auto">
           {isLoading ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Activity' : 'Create Activity')}
@@ -240,3 +227,4 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
     </Form>
   );
 }
+```

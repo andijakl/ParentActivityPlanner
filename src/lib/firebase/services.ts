@@ -107,15 +107,34 @@ export const getActivity = async (activityId: string): Promise<Activity | null> 
     const activityDocRef = doc(db, "activities", activityId);
     const activityDocSnap = await getDoc(activityDocRef);
     if (activityDocSnap.exists()) {
-        // Convert Firestore Timestamp to JS Date for easier use in components if needed
         const data = activityDocSnap.data() as Activity;
-        // data.date = (data.date as Timestamp).toDate();
-        // data.createdAt = (data.createdAt as Timestamp).toDate();
         return data;
     } else {
         return null;
     }
 };
+
+export const updateActivity = async (activityId: string, data: Partial<Omit<Activity, 'id' | 'createdAt' | 'creatorId' | 'creatorName' | 'creatorPhotoURL' | 'participants'>>): Promise<void> => {
+    if (!db) {
+        console.error("Firestore (db) is not initialized. Cannot update activity.");
+        throw new Error("Database service unavailable.");
+    }
+    const activityDocRef = doc(db, "activities", activityId);
+    // We don't want to update fields like creatorId, createdAt, participants through this generic update
+    // Those should be handled by specific functions like joinActivity/leaveActivity if needed
+    // This function is primarily for title, date, location
+    await updateDoc(activityDocRef, data);
+};
+
+export const deleteActivity = async (activityId: string): Promise<void> => {
+    if (!db) {
+        console.error("Firestore (db) is not initialized. Cannot delete activity.");
+        throw new Error("Database service unavailable.");
+    }
+    const activityDocRef = doc(db, "activities", activityId);
+    await deleteDoc(activityDocRef);
+};
+
 
 // Get activities created by a specific user
 export const getUserActivities = async (uid: string): Promise<Activity[]> => {
@@ -289,8 +308,24 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
         photoURL: friendProfile.photoURL,
     };
 
-    const friendDocRef = doc(db, `users/${userId}/friends/${friendId}`);
-    await setDoc(friendDocRef, friendData);
+    // Add friend to current user's friend list
+    const userFriendDocRef = doc(db, `users/${userId}/friends/${friendId}`);
+    await setDoc(userFriendDocRef, friendData);
+
+    // Add current user to friend's friend list (bidirectional)
+    const currentUserProfile = await getUserProfile(userId);
+    if (!currentUserProfile) {
+        // This should not happen if the current user is logged in and has a profile
+        console.error("Current user profile not found while adding friend to their list.");
+        throw new Error("Current user profile not found.");
+    }
+    const currentUserAsFriendData: Friend = {
+        uid: currentUserProfile.uid,
+        displayName: currentUserProfile.displayName,
+        photoURL: currentUserProfile.photoURL,
+    };
+    const friendUserDocRef = doc(db, `users/${friendId}/friends/${userId}`);
+    await setDoc(friendUserDocRef, currentUserAsFriendData);
 };
 
 // Remove a friend relationship (requires removing from both users' subcollections)

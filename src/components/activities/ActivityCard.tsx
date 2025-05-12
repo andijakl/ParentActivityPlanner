@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { de } from 'date-fns/locale'; // Import German locale
+import { de } from 'date-fns/locale'; // Keep German locale for date formatting conventions
 import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { joinActivity, leaveActivity } from '@/lib/firebase/services';
@@ -35,8 +35,8 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
     const activityDate = activity.date instanceof Timestamp ? activity.date.toDate() : (activity.date instanceof Date ? activity.date : null);
 
     // Format date and time using German locale and 24-hour format
-    const formattedDate = activityDate ? format(activityDate, "PPP", { locale: de }) : 'Datum TBD';
-    const formattedTime = activityDate ? format(activityDate, "HH:mm", { locale: de }) : 'Zeit TBD';
+    const formattedDate = activityDate ? format(activityDate, "PPP", { locale: de }) : 'Date TBD';
+    const formattedTime = activityDate ? format(activityDate, "HH:mm", { locale: de }) : 'Time TBD';
 
     const handleJoin = async () => {
         if (!user || !userProfile) return;
@@ -48,13 +48,13 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
                 photoURL: userProfile.photoURL ?? user.photoURL
             };
             await joinActivity(activity.id, participantData);
-            toast({ title: "Aktivität beigetreten!", description: `Du bist "${activity.title}" beigetreten.` });
+            toast({ title: "Joined Activity!", description: `You have joined "${activity.title}".` });
             // Note: Ideally, refresh data or update state locally for immediate UI update
             // For now, user needs to refresh page to see updated participant list accurately.
              window.location.reload(); // Simple refresh for now
         } catch (error) {
             console.error("Error joining activity:", error);
-            toast({ title: "Fehler", description: "Konnte der Aktivität nicht beitreten.", variant: "destructive" });
+            toast({ title: "Error", description: "Could not join activity.", variant: "destructive" });
         } finally {
             setIsJoining(false);
         }
@@ -73,12 +73,12 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
              }
 
             await leaveActivity(activity.id, participantToRemove);
-            toast({ title: "Aktivität verlassen", description: `Du hast "${activity.title}" verlassen.` });
+            toast({ title: "Left Activity", description: `You have left "${activity.title}".` });
              // Note: Ideally, refresh data or update state locally
              window.location.reload(); // Simple refresh for now
         } catch (error) {
             console.error("Error leaving activity:", error);
-            toast({ title: "Fehler", description: "Konnte die Aktivität nicht verlassen.", variant: "destructive" });
+            toast({ title: "Error", description: "Could not leave activity.", variant: "destructive" });
         } finally {
             setIsLeaving(false);
         }
@@ -102,16 +102,16 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
              <Avatar className="h-6 w-6">
-                <AvatarImage src={activity.creatorPhotoURL ?? undefined} alt={activity.creatorName ?? 'Ersteller'} />
-                <AvatarFallback>{activity.creatorName ? activity.creatorName[0] : 'E'}</AvatarFallback>
+                <AvatarImage src={activity.creatorPhotoURL ?? undefined} alt={activity.creatorName ?? 'Creator'} />
+                <AvatarFallback>{activity.creatorName ? activity.creatorName[0] : 'C'}</AvatarFallback>
              </Avatar>
-            <span>Erstellt von {isCreator ? 'Dir' : activity.creatorName ?? 'Unbekannt'}</span>
+            <span>Created by {isCreator ? 'You' : activity.creatorName ?? 'Unknown'}</span>
         </div>
       </CardHeader>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center gap-2 text-sm">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span>{formattedDate} um {formattedTime} Uhr</span>
+          <span>{formattedDate} at {formattedTime}</span>
         </div>
         {activity.location && (
           <div className="flex items-center gap-2 text-sm">
@@ -121,18 +121,18 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
         )}
          <div className="flex items-center gap-2 text-sm pt-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="mr-2">{activity.participants.length} {activity.participants.length === 1 ? 'Teilnehmer' : 'Teilnehmer'}</span>
+            <span className="mr-2">{activity.participants.length} {activity.participants.length === 1 ? 'participant' : 'participants'}</span>
              <div className="flex -space-x-2 overflow-hidden">
                 {activity.participants.slice(0, 5).map((p) => (
                      <Tooltip key={p.uid}>
                          <TooltipTrigger asChild>
                              <Avatar className="inline-block h-6 w-6 rounded-full ring-2 ring-background">
-                                 <AvatarImage src={p.photoURL ?? undefined} alt={p.name ?? 'Teilnehmer'} />
-                                 <AvatarFallback>{p.name ? p.name[0] : 'T'}</AvatarFallback>
+                                 <AvatarImage src={p.photoURL ?? undefined} alt={p.name ?? 'Participant'} />
+                                 <AvatarFallback>{p.name ? p.name[0] : 'P'}</AvatarFallback>
                              </Avatar>
                          </TooltipTrigger>
                          <TooltipContent>
-                           <p>{p.name ?? 'Teilnehmer'}</p>
+                           <p>{p.name ?? 'Participant'}</p>
                          </TooltipContent>
                     </Tooltip>
                 ))}
@@ -144,7 +144,7 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
                             </Avatar>
                         </TooltipTrigger>
                         <TooltipContent>
-                            <p>...und {activity.participants.length - 5} weitere</p>
+                            <p>...and {activity.participants.length - 5} more</p>
                         </TooltipContent>
                      </Tooltip>
                  )}
@@ -156,17 +156,17 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
         {!isCreator && !isParticipant && (
           <Button size="sm" onClick={handleJoin} disabled={isJoining || isLeaving}>
             <UserPlus className="mr-1 h-4 w-4" />
-            {isJoining ? 'Beitreten...' : 'Beitreten'}
+            {isJoining ? 'Joining...' : 'Join'}
           </Button>
         )}
         {!isCreator && isParticipant && (
           <Button variant="outline" size="sm" onClick={handleLeave} disabled={isJoining || isLeaving}>
             <UserMinus className="mr-1 h-4 w-4" />
-            {isLeaving ? 'Verlassen...' : 'Verlassen'}
+            {isLeaving ? 'Leaving...' : 'Leave'}
           </Button>
         )}
          {isCreator && (
-             <p className="text-sm text-muted-foreground italic">Du hast diese Aktivität erstellt.</p>
+             <p className="text-sm text-muted-foreground italic">You created this activity.</p>
              // Optionally add Edit/Delete buttons here for the creator
         )}
       </CardFooter>

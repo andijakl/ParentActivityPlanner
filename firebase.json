@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "public", // Standard directory for static assets (can be empty if Next.js handles all)
+    "public": "out",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -9,21 +9,8 @@
     "rewrites": [
       {
         "source": "**",
-        // Replace "nextServer" with the actual name of your Cloud Function
-        // if you deploy using Firebase Functions for SSR.
-        // For other hosting platforms (Vercel, Netlify), this file might not be needed
-        // or will be configured differently.
-        "function": "nextServer"
+        "destination": "/index.html"
       }
     ]
-  },
-  "functions": [
-     // Add this section if deploying SSR via Firebase Cloud Functions.
-     // Configure according to your functions directory and runtime.
-    {
-      "source": "functions", // Or your Firebase Functions directory name
-      "codebase": "default",
-      "runtime": "nodejs18" // Or your preferred runtime
-    }
-   ]
+  }
 }

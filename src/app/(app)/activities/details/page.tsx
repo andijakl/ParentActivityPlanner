@@ -1,10 +1,10 @@
-// src/app/(app)/activities/[id]/page.tsx
+// src/app/(app)/activities/details/page.tsx
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation'; // Added useRouter
+import React, { useEffect, useState, Suspense } from 'react'; // Import Suspense
+import { useSearchParams, useRouter } from 'next/navigation'; // Use useSearchParams
 import { useAuth } from '@/context/AuthContext';
-import { getActivity, joinActivity, leaveActivity, deleteActivity } from '@/lib/firebase/services'; // Added deleteActivity
+import { getActivity, joinActivity, leaveActivity, deleteActivity } from '@/lib/firebase/services';
 import type { Activity } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale'; // Keep German locale for date formatting conventions
-import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ArrowLeft, FilePenLine, Trash2 } from 'lucide-react'; // Added FilePenLine, Trash2
+import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ArrowLeft, FilePenLine, Trash2, Home } from 'lucide-react'; // Added Home icon
 import { Timestamp } from 'firebase/firestore';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
@@ -29,12 +29,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-
-export default function ActivityDetailPage() {
-  const params = useParams();
-  const router = useRouter(); // Initialize useRouter
-  const activityId = params.id as string;
-  const { user, userProfile } = useAuth();
+function ActivityDetailContent() { // Wrap content in a component for Suspense
+  const searchParams = useSearchParams(); // Use useSearchParams
+  const router = useRouter();
+  const activityId = searchParams.get('id'); // Get ID from query parameter
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [activity, setActivity] = useState<Activity | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +41,6 @@ export default function ActivityDetailPage() {
   const [isJoining, setIsJoining] = React.useState(false);
   const [isLeaving, setIsLeaving] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
-
 
   useEffect(() => {
     if (activityId) {
@@ -64,7 +62,7 @@ export default function ActivityDetailPage() {
           setIsLoading(false);
         });
     } else {
-        setError("Invalid activity ID.");
+        setError("No activity ID provided.");
         setIsLoading(false);
     }
   }, [activityId]);
@@ -80,7 +78,8 @@ export default function ActivityDetailPage() {
             };
             await joinActivity(activity.id, participantData);
             toast({ title: "Joined Activity!", description: `You have joined "${activity.title}".` });
-            const updatedActivity = await getActivity(activityId);
+            // Re-fetch activity data to update the UI
+            const updatedActivity = await getActivity(activityId!); // Use non-null assertion as ID must exist here
             setActivity(updatedActivity);
         } catch (error) {
             console.error("Error joining activity:", error);
@@ -99,7 +98,8 @@ export default function ActivityDetailPage() {
 
             await leaveActivity(activity.id, participantToRemove);
             toast({ title: "Left Activity", description: `You have left "${activity.title}".` });
-             const updatedActivity = await getActivity(activityId);
+             // Re-fetch activity data to update the UI
+             const updatedActivity = await getActivity(activityId!); // Use non-null assertion
              setActivity(updatedActivity);
         } catch (error) {
             console.error("Error leaving activity:", error);
@@ -124,24 +124,36 @@ export default function ActivityDetailPage() {
     };
 
 
-  if (isLoading) {
+  if (isLoading || authLoading) { // Consider authLoading as well
     return <ActivityDetailSkeleton />;
   }
 
   if (error) {
     return (
-        <div className="container mx-auto py-6 px-4 md:px-6 text-center">
-             <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4">
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                Back to Dashboard
-            </Link>
+        <div className="container mx-auto py-6 px-4 md:px-6 text-center max-w-3xl">
+             <Button variant="link" asChild className="mb-4">
+                <Link href="/dashboard">
+                    <ArrowLeft className="mr-1 h-4 w-4" />
+                    Back to Dashboard
+                </Link>
+             </Button>
             <p className="text-destructive mt-4">{error}</p>
         </div>
     );
   }
 
   if (!activity) {
-     return <p className="text-center mt-10">Activity not found.</p>;
+     return (
+         <div className="container mx-auto py-6 px-4 md:px-6 text-center max-w-3xl">
+              <Button variant="link" asChild className="mb-4">
+                <Link href="/dashboard">
+                     <ArrowLeft className="mr-1 h-4 w-4" />
+                     Back to Dashboard
+                </Link>
+             </Button>
+             <p className="text-center mt-10">Activity not found.</p>;
+         </div>
+     );
   }
 
    const activityDate = activity.date instanceof Timestamp ? activity.date.toDate() : (activity.date instanceof Date ? activity.date : null);
@@ -154,10 +166,12 @@ export default function ActivityDetailPage() {
 
   return (
     <div className="container mx-auto py-6 px-4 md:px-6 max-w-3xl">
-       <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4">
-         <ArrowLeft className="mr-1 h-4 w-4" />
-         Back to Dashboard
-       </Link>
+       <Button variant="link" asChild className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground -ml-4">
+         <Link href="/dashboard">
+           <ArrowLeft className="mr-1 h-4 w-4" />
+           Back to Dashboard
+         </Link>
+       </Button>
       <Card className="overflow-hidden">
         <CardHeader className="p-6">
           <CardTitle className="text-2xl md:text-3xl mb-2">{activity.title}</CardTitle>
@@ -194,7 +208,8 @@ export default function ActivityDetailPage() {
             {isCreator && (
                  <div className="mr-auto flex gap-2">
                     <Button variant="outline" size="sm" asChild>
-                        <Link href={`/activities/${activity.id}/edit`}>
+                        {/* Link to edit page with query parameter */}
+                        <Link href={`/activities/edit?id=${activity.id}`}>
                             <FilePenLine className="mr-1 h-4 w-4" /> Edit
                         </Link>
                     </Button>
@@ -240,6 +255,7 @@ export default function ActivityDetailPage() {
 }
 
 
+// Skeleton component remains the same
 function ActivityDetailSkeleton() {
     return (
          <div className="container mx-auto py-6 px-4 md:px-6 max-w-3xl">
@@ -267,4 +283,13 @@ function ActivityDetailSkeleton() {
             </Card>
         </div>
     )
+}
+
+// Export the page component wrapped in Suspense
+export default function ActivityDetailPage() {
+  return (
+    <Suspense fallback={<ActivityDetailSkeleton />}>
+      <ActivityDetailContent />
+    </Suspense>
+  );
 }

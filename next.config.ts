@@ -1,9 +1,9 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  // output: 'export', // Removed: Static export conflicts with dynamic routes like /activities/[id]
+  output: 'export', // Enable static export
   images: {
-    unoptimized: false, // Set to false for SSR/ISR builds with optimized images
+    unoptimized: true, // Required for static export, disable Next.js Image Optimization
     remotePatterns: [
       {
         protocol: 'https',
@@ -20,12 +20,13 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Keep these only if absolutely necessary, prefer fixing the errors
+  // typescript: {
+  //   ignoreBuildErrors: true,
+  // },
+  // eslint: {
+  //   ignoreDuringBuilds: true,
+  // },
 };
 
 export default nextConfig;

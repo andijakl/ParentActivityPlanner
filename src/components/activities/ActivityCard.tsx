@@ -27,6 +27,7 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
     const { toast } = useToast();
     const [isJoining, setIsJoining] = React.useState(false);
     const [isLeaving, setIsLeaving] = React.useState(false);
+    const [needsRefresh, setNeedsRefresh] = React.useState(false); // State to trigger re-fetch in parent if needed
 
     const isCreator = activity.creatorId === currentUserId;
     const isParticipant = activity.participants.some(p => p.uid === currentUserId);
@@ -49,9 +50,10 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
             };
             await joinActivity(activity.id, participantData);
             toast({ title: "Joined Activity!", description: `You have joined "${activity.title}".` });
-            // Note: Ideally, refresh data or update state locally for immediate UI update
-            // For now, user needs to refresh page to see updated participant list accurately.
-             window.location.reload(); // Simple refresh for now
+            // Instead of reload, signal parent or update local state if possible
+            // For simplicity, we'll keep reload but ideally parent handles data refresh
+             window.location.reload();
+             // setNeedsRefresh(true); // Example of signaling parent
         } catch (error) {
             console.error("Error joining activity:", error);
             toast({ title: "Error", description: "Could not join activity.", variant: "destructive" });
@@ -74,8 +76,9 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
 
             await leaveActivity(activity.id, participantToRemove);
             toast({ title: "Left Activity", description: `You have left "${activity.title}".` });
-             // Note: Ideally, refresh data or update state locally
-             window.location.reload(); // Simple refresh for now
+             // Instead of reload, signal parent or update local state
+             window.location.reload();
+             // setNeedsRefresh(true); // Example of signaling parent
         } catch (error) {
             console.error("Error leaving activity:", error);
             toast({ title: "Error", description: "Could not leave activity.", variant: "destructive" });
@@ -91,7 +94,8 @@ export function ActivityCard({ activity, currentUserId }: ActivityCardProps) {
       <CardHeader className="p-4 bg-muted/30 dark:bg-muted/10 border-b">
          <div className="flex items-center justify-between gap-4">
              <CardTitle className="text-lg">{activity.title}</CardTitle>
-              <Link href={`/activities/${activity.id}`} passHref>
+              {/* Update link to use query parameter */}
+              <Link href={`/activities/details?id=${activity.id}`} passHref>
                 <Button variant="ghost" size="sm" className="text-xs h-7">
                     Details
                     <ExternalLink className="ml-1 h-3 w-3"/>

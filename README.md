@@ -9,8 +9,8 @@ Built with Next.js, TypeScript, Tailwind CSS, ShadCN UI, and Firebase.
 - **User Authentication**: Sign up/in with Email/Password or Google Account via Firebase Authentication.
 - **User Profiles**: Manage parent contact information and children's nicknames.
 - **Activity Planning**: Create activities with details like title, date, time, and optional location.
-- **Calendar/Activity View**: See your planned activities and those of your friends.
-- **Friend System**: Connect with other parents using simple, shareable invite codes.
+- **Calendar/Activity View**: See your planned activities and those of your friends. View activity details. Edit and delete activities you created.
+- **Friend System**: Connect with other parents using simple, shareable invite links.
 - **Join Activities**: Participate in activities created by friends.
 - **Participant Lists**: View who is attending an activity.
 - **Responsive Design**: Mobile-first UI for easy use on any device.
@@ -50,8 +50,8 @@ Built with Next.js, TypeScript, Tailwind CSS, ShadCN UI, and Firebase.
     *   **Authorize Domains**:
         *   Still in the Authentication section, go to the "Settings" tab.
         *   Under "Authorized domains", click "Add domain".
-        *   Add `localhost` (this is crucial for local development). If your app runs on a specific port like `localhost:9002` and you still face issues, ensure `localhost` is sufficient. Firebase usually treats `localhost` broadly for development.
-        *   If deploying to a custom domain later, add that domain here as well.
+        *   Add `localhost` (this is crucial for local development).
+        *   **Important:** If deploying, add your Firebase Hosting domain(s) here (e.g., `your-project-id.web.app`, `your-project-id.firebaseapp.com`, and any custom domains).
 3.  **Enable Firestore Database**:
     *   Navigate to "Firestore Database".
     *   Click "Create database".
@@ -70,7 +70,7 @@ Built with Next.js, TypeScript, Tailwind CSS, ShadCN UI, and Firebase.
         NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=YOUR_STORAGE_BUCKET
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID
         NEXT_PUBLIC_FIREBASE_APP_ID=YOUR_APP_ID
-        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=YOUR_MEASUREMENT_ID
+        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=YOUR_MEASUREMENT_ID # Optional
         ```
     *   **Important**: `.env.local` should be added to your `.gitignore` file to avoid committing sensitive keys.
 
@@ -101,26 +101,30 @@ service cloud.firestore {
       allow create: if request.auth != null; // Allow creation if logged in
     }
 
-    // Activities: Logged-in users can read/create. Only creator can update/delete.
-    // Participants can be updated by any logged-in user (for joining).
-    match /activities/{activityId} {
-      allow read, create: if request.auth != null;
-      allow update, delete: if request.auth != null && resource.data.creatorId == request.auth.uid;
-      // Allow updating participants array by any authenticated user (for joining/leaving)
-      allow update: if request.auth != null && request.resource.data.participants != resource.data.participants;
+    // Friends subcollection: Can manage own friends list
+    match /users/{userId}/friends/{friendId} {
+       allow read, write, delete: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Friendships: Users can manage their own friend lists
-    match /users/{userId}/friends/{friendId} {
-       allow read, create, delete: if request.auth != null && request.auth.uid == userId;
+    // Activities: Logged-in users can read/create. Only creator can update/delete.
+    // Participants can be updated by any logged-in user (for joining/leaving).
+    match /activities/{activityId} {
+      allow read, create: if request.auth != null;
+      // Allow update only if it's the creator OR if only the participants field is changing
+      allow update: if request.auth != null && (
+                      resource.data.creatorId == request.auth.uid ||
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
+                    );
+      // Allow delete only by the creator
+      allow delete: if request.auth != null && resource.data.creatorId == request.auth.uid;
     }
 
     // Invitations: Logged-in users can read/create/delete their own invites.
-    // Need careful rules for reading based on code.
+    // Anyone logged in can read an invite (to accept it).
     match /invitations/{inviteCode} {
-      allow read, create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.inviterId == request.auth.uid;
       allow delete: if request.auth != null && resource.data.inviterId == request.auth.uid;
-      // Consider rules allowing read access for the specific invitee if needed during acceptance
     }
   }
 }
@@ -130,11 +134,9 @@ Upload these rules via the Firebase Console ("Firestore Database" > "Rules" tab)
 
 ## Deployment
 
-This project uses Next.js App Router and can be deployed as a static site using `output: 'export'`.
+This project uses Next.js App Router configured for **static export** (`output: 'export'`) and is ideal for deployment to **Firebase Hosting**.
 
-**Recommended Deployment: Firebase Hosting**
-
-Firebase Hosting is well-suited for static Next.js exports.
+### Firebase Hosting Deployment
 
 1.  **Ensure `output: 'export'` is in `next.config.ts`:**
     ```ts
@@ -143,7 +145,10 @@ Firebase Hosting is well-suited for static Next.js exports.
 
     const nextConfig: NextConfig = {
       output: 'export', // Enable static export
-      // ... other config like images ...
+      images: {
+        unoptimized: true, // Required for static export
+      },
+      // ... other config ...
     };
 
     export default nextConfig;
@@ -165,11 +170,11 @@ Firebase Hosting is well-suited for static Next.js exports.
     ```
     *   Select "Use an existing project".
     *   Set the public directory to `out`.
-    *   Configure as a single-page app: **Yes**. This is important for handling client-side routing.
-    *   Set up automatic builds and deploys with GitHub: No (unless you want to configure CI/CD).
+    *   Configure as a single-page app: **Yes**. This is crucial for handling client-side routing.
+    *   Set up automatic builds and deploys with GitHub: No (unless you want to configure CI/CD - see below).
 
-4.  **Modify `firebase.json`:**
-    Ensure your `firebase.json` looks similar to this:
+4.  **Verify `firebase.json`:**
+    Ensure your `firebase.json` (created/updated by `firebase init hosting`) looks similar to this:
     ```json
     {
       "hosting": {
@@ -186,26 +191,26 @@ Firebase Hosting is well-suited for static Next.js exports.
           }
         ]
       }
-      // Remove the "functions" section if you are not using SSR Cloud Functions
     }
     ```
-    The rewrite rule ensures that all paths are served by `index.html`, allowing Next.js client-side router to handle them.
+    The `"rewrites"` rule is essential for a Single Page Application (SPA) like this Next.js app. It ensures that all navigation requests are handled by `index.html`, allowing the Next.js client-side router to manage the routes correctly.
 
 5.  **Deploy to Firebase Hosting:**
     ```bash
     firebase deploy --only hosting
     ```
+    After deployment, access your app at the provided Firebase Hosting URL (e.g., `your-project-id.web.app`). Remember to add this URL to your Firebase Authentication authorized domains.
 
-**Other Static Hosting Options:**
+### Other Static Hosting Options
 
-You can also deploy the contents of the `out/` directory to other static hosting providers like Vercel (select "Other" framework type), Netlify, GitHub Pages, etc. Ensure they are configured to handle Single Page Applications (SPAs) correctly (usually by redirecting all paths to `index.html`).
+You can also deploy the contents of the `out/` directory to other static hosting providers like Vercel (select "Other" framework type), Netlify, GitHub Pages, etc. Ensure they are configured to handle Single Page Applications (SPAs) correctly, usually by setting up a rewrite rule similar to the Firebase one (redirecting all paths to `index.html`).
 
-**Continuous Deployment (CI/CD) - Example with GitHub Actions for Firebase Hosting:**
+### Continuous Deployment (CI/CD) - Example with GitHub Actions for Firebase Hosting
 
 1.  **Push your code** to a GitHub repository.
 2.  **Set up GitHub Actions:** Create a `.github/workflows/firebase-deploy.yml` file:
     ```yaml
-    name: Deploy to Firebase Hosting
+    name: Deploy to Firebase Hosting on Push
 
     on:
       push:
@@ -215,31 +220,49 @@ You can also deploy the contents of the `out/` directory to other static hosting
     jobs:
       build_and_deploy:
         runs-on: ubuntu-latest
+        env: # Define NEXT_PUBLIC_ variables needed at BUILD time
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
         steps:
-          - uses: actions/checkout@v3
-          - name: Use Node.js
-            uses: actions/setup-node@v3
+          - name: Checkout Repository
+            uses: actions/checkout@v4 # Updated version
+
+          - name: Set up Node.js
+            uses: actions/setup-node@v4 # Updated version
             with:
               node-version: '18' # Match your development Node.js version
               cache: 'npm' # Or yarn/pnpm
+
           - name: Install Dependencies
             run: npm install # Or yarn install / pnpm install
-          - name: Build Next.js App
-            run: npm run build # Or yarn build / pnpm build
-            env: # Set build-time environment variables if needed
-              NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
-              NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
-              # ... add all other NEXT_PUBLIC_ variables ...
+
+          - name: Build Next.js Static Site
+            run: npm run build # Generates the 'out' directory
+
           - name: Deploy to Firebase Hosting
-            uses: FirebaseExtended/action-hosting-deploy@v0
+            uses: FirebaseExtended/action-hosting-deploy@v1 # Use v1 for stability
             with:
               repoToken: '${{ secrets.GITHUB_TOKEN }}'
               firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PARENT_ACTIVITY_HUB }}' # Your service account JSON key
-              channelId: live
-              projectId: your-firebase-project-id # Your Firebase Project ID
+              projectId: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }} # Use the secret for Project ID
+              channelId: live # Deploy to the live channel
     ```
 3.  **Add Secrets to GitHub:**
     *   Go to your GitHub repository settings > Secrets and variables > Actions.
-    *   Add secrets for `FIREBASE_SERVICE_ACCOUNT_PARENT_ACTIVITY_HUB` (generate a service account key in Firebase Project Settings > Service accounts) and all your `NEXT_PUBLIC_FIREBASE_*` variables.
-4.  **Push the workflow file.** Deployments will trigger automatically on pushes to the specified branch.
+    *   Click "New repository secret" for each secret:
+        *   `FIREBASE_SERVICE_ACCOUNT_PARENT_ACTIVITY_HUB`: Generate a service account key in Firebase Project Settings > Service accounts. Go to the "Keys" tab for the service account, click "Add key" > "Create new key", choose JSON, and create. Copy the entire JSON content as the secret value. **Treat this key securely!**
+        *   `NEXT_PUBLIC_FIREBASE_API_KEY`: Your Firebase API Key.
+        *   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`: Your Firebase Auth Domain.
+        *   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`: Your Firebase Project ID.
+        *   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`: Your Firebase Storage Bucket.
+        *   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`: Your Firebase Messaging Sender ID.
+        *   `NEXT_PUBLIC_FIREBASE_APP_ID`: Your Firebase App ID.
+        *   `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`: Your Firebase Measurement ID (optional).
+4.  **Push the workflow file.** Deployments will now trigger automatically on pushes to the specified branch (`main` in the example).
 ```
+

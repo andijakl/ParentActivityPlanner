@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
+import { de } from 'date-fns/locale'; // Import German locale
 import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ArrowLeft, FilePenLine, Trash2 } from 'lucide-react'; // Added FilePenLine, Trash2
 import { Timestamp } from 'firebase/firestore';
 import Link from 'next/link';
@@ -52,18 +53,18 @@ export default function ActivityDetailPage() {
           if (data) {
             setActivity(data);
           } else {
-            setError("Activity not found.");
+            setError("Aktivität nicht gefunden.");
           }
         })
         .catch(err => {
-          console.error("Error fetching activity details:", err);
-          setError("Failed to load activity details.");
+          console.error("Fehler beim Laden der Aktivitätsdetails:", err);
+          setError("Fehler beim Laden der Aktivitätsdetails.");
         })
         .finally(() => {
           setIsLoading(false);
         });
     } else {
-        setError("Invalid activity ID.");
+        setError("Ungültige Aktivitäts-ID.");
         setIsLoading(false);
     }
   }, [activityId]);
@@ -78,12 +79,12 @@ export default function ActivityDetailPage() {
                 photoURL: userProfile.photoURL ?? user.photoURL
             };
             await joinActivity(activity.id, participantData);
-            toast({ title: "Joined Activity!", description: `You've joined "${activity.title}".` });
+            toast({ title: "Aktivität beigetreten!", description: `Du bist "${activity.title}" beigetreten.` });
             const updatedActivity = await getActivity(activityId);
             setActivity(updatedActivity);
         } catch (error) {
-            console.error("Error joining activity:", error);
-            toast({ title: "Error", description: "Could not join the activity.", variant: "destructive" });
+            console.error("Fehler beim Beitreten der Aktivität:", error);
+            toast({ title: "Fehler", description: "Konnte der Aktivität nicht beitreten.", variant: "destructive" });
         } finally {
             setIsJoining(false);
         }
@@ -97,12 +98,12 @@ export default function ActivityDetailPage() {
              if (!participantToRemove) return;
 
             await leaveActivity(activity.id, participantToRemove);
-            toast({ title: "Left Activity", description: `You've left "${activity.title}".` });
+            toast({ title: "Aktivität verlassen", description: `Du hast "${activity.title}" verlassen.` });
              const updatedActivity = await getActivity(activityId);
              setActivity(updatedActivity);
         } catch (error) {
-            console.error("Error leaving activity:", error);
-            toast({ title: "Error", description: "Could not leave the activity.", variant: "destructive" });
+            console.error("Fehler beim Verlassen der Aktivität:", error);
+            toast({ title: "Fehler", description: "Konnte die Aktivität nicht verlassen.", variant: "destructive" });
         } finally {
             setIsLeaving(false);
         }
@@ -113,11 +114,11 @@ export default function ActivityDetailPage() {
         setIsDeleting(true);
         try {
             await deleteActivity(activity.id);
-            toast({ title: "Activity Deleted", description: `"${activity.title}" has been removed.` });
+            toast({ title: "Aktivität gelöscht", description: `"${activity.title}" wurde entfernt.` });
             router.push('/dashboard'); // Redirect after successful deletion
         } catch (err) {
-            console.error("Error deleting activity:", err);
-            toast({ title: "Error", description: "Could not delete the activity.", variant: "destructive" });
+            console.error("Fehler beim Löschen der Aktivität:", err);
+            toast({ title: "Fehler", description: "Konnte die Aktivität nicht löschen.", variant: "destructive" });
             setIsDeleting(false);
         }
     };
@@ -132,7 +133,7 @@ export default function ActivityDetailPage() {
         <div className="container mx-auto py-6 px-4 md:px-6 text-center">
              <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4">
                 <ArrowLeft className="mr-1 h-4 w-4" />
-                Back to Dashboard
+                Zurück zum Dashboard
             </Link>
             <p className="text-destructive mt-4">{error}</p>
         </div>
@@ -140,13 +141,14 @@ export default function ActivityDetailPage() {
   }
 
   if (!activity) {
-     return <p className="text-center mt-10">Activity not found.</p>;
+     return <p className="text-center mt-10">Aktivität nicht gefunden.</p>;
   }
 
    // Ensure activity.date is treated correctly, whether it's a Firestore Timestamp or already a Date
    const activityDate = activity.date instanceof Timestamp ? activity.date.toDate() : (activity.date instanceof Date ? activity.date : null);
-   const formattedDate = activityDate ? format(activityDate, "PPP") : 'Date TBD';
-   const formattedTime = activityDate ? format(activityDate, "p") : 'Time TBD';
+   // Format date and time using German locale and 24-hour format
+   const formattedDate = activityDate ? format(activityDate, "PPP", { locale: de }) : 'Datum TBD';
+   const formattedTime = activityDate ? format(activityDate, "HH:mm", { locale: de }) : 'Zeit TBD';
 
    const isCreator = activity.creatorId === user?.uid;
    const isParticipant = activity.participants.some(p => p.uid === user?.uid);
@@ -156,7 +158,7 @@ export default function ActivityDetailPage() {
     <div className="container mx-auto py-6 px-4 md:px-6 max-w-3xl">
        <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4">
          <ArrowLeft className="mr-1 h-4 w-4" />
-         Back to Dashboard
+         Zurück zum Dashboard
        </Link>
       <Card className="overflow-hidden">
         <CardHeader className="p-6">
@@ -164,7 +166,7 @@ export default function ActivityDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-muted-foreground text-sm">
               <div className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4" />
-                  <span>{formattedDate} at {formattedTime}</span>
+                  <span>{formattedDate} um {formattedTime} Uhr</span>
               </div>
               {activity.location && (
                   <div className="flex items-center gap-2">
@@ -175,17 +177,17 @@ export default function ActivityDetailPage() {
           </div>
            <div className="flex items-center gap-2 text-sm mt-3 pt-3 border-t">
              <Avatar className="h-8 w-8">
-                <AvatarImage src={activity.creatorPhotoURL ?? undefined} alt={activity.creatorName ?? 'Creator'} />
-                <AvatarFallback>{activity.creatorName ? activity.creatorName[0] : 'C'}</AvatarFallback>
+                <AvatarImage src={activity.creatorPhotoURL ?? undefined} alt={activity.creatorName ?? 'Ersteller'} />
+                <AvatarFallback>{activity.creatorName ? activity.creatorName[0] : 'E'}</AvatarFallback>
              </Avatar>
-             <span>Created by {isCreator ? 'You' : activity.creatorName ?? 'Unknown'}</span>
+             <span>Erstellt von {isCreator ? 'Dir' : activity.creatorName ?? 'Unbekannt'}</span>
          </div>
         </CardHeader>
         <CardContent className="p-6">
             <div className="mb-6">
                 <h3 className="font-semibold mb-3 text-lg flex items-center gap-2">
                     <Users className="h-5 w-5"/>
-                    Participants ({activity.participants.length})
+                    Teilnehmer ({activity.participants.length})
                  </h3>
                  <ParticipantsList participants={activity.participants} />
             </div>
@@ -195,26 +197,26 @@ export default function ActivityDetailPage() {
                  <div className="mr-auto flex gap-2">
                     <Button variant="outline" size="sm" asChild>
                         <Link href={`/activities/${activity.id}/edit`}>
-                            <FilePenLine className="mr-1 h-4 w-4" /> Edit
+                            <FilePenLine className="mr-1 h-4 w-4" /> Bearbeiten
                         </Link>
                     </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm" disabled={isDeleting}>
-                                <Trash2 className="mr-1 h-4 w-4" /> {isDeleting ? 'Deleting...' : 'Delete'}
+                                <Trash2 className="mr-1 h-4 w-4" /> {isDeleting ? 'Löschen...' : 'Löschen'}
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader>
-                                <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                <AlertDialogTitle>Löschen bestätigen</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Are you sure you want to delete the activity "{activity.title}"? This action cannot be undone.
+                                    Bist du sicher, dass du die Aktivität "{activity.title}" löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                                <AlertDialogCancel disabled={isDeleting}>Abbrechen</AlertDialogCancel>
                                 <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-                                    {isDeleting ? 'Deleting...' : 'Delete Activity'}
+                                    {isDeleting ? 'Löschen...' : 'Aktivität löschen'}
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
@@ -224,13 +226,13 @@ export default function ActivityDetailPage() {
             {!isCreator && !isParticipant && (
               <Button onClick={handleJoin} disabled={isJoining || isLeaving}>
                 <UserPlus className="mr-2 h-4 w-4" />
-                {isJoining ? 'Joining...' : 'Join Activity'}
+                {isJoining ? 'Beitreten...' : 'Beitreten'}
               </Button>
             )}
             {!isCreator && isParticipant && (
               <Button variant="outline" onClick={handleLeave} disabled={isJoining || isLeaving}>
                 <UserMinus className="mr-2 h-4 w-4" />
-                {isLeaving ? 'Leaving...' : 'Leave Activity'}
+                {isLeaving ? 'Verlassen...' : 'Verlassen'}
               </Button>
             )}
         </CardFooter>

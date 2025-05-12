@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import { Timestamp } from "firebase/firestore";
 import { format, parseISO, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns';
+import { de } from 'date-fns/locale'; // Import German locale
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +26,9 @@ import type { Activity } from '@/lib/types';
 
 
 const formSchema = z.object({
-  title: z.string().min(3, { message: "Title must be at least 3 characters." }).max(100),
-  date: z.date({ required_error: "A date is required." }),
-  time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)."}), // HH:mm format
+  title: z.string().min(3, { message: "Titel muss mindestens 3 Zeichen lang sein." }).max(100),
+  date: z.date({ required_error: "Ein Datum ist erforderlich." }),
+  time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Ungültiges Zeitformat (HH:mm)."}), // HH:mm format
   location: z.string().max(100).optional().default("").transform(value => value === "" ? null : value), // Ensure empty string becomes null
   // description: z.string().max(500).optional().nullable(),
 });
@@ -48,7 +49,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
   const isEditing = !!activity;
 
   const defaultDate = activity?.date instanceof Timestamp ? activity.date.toDate() : new Date();
-  const defaultTime = activity?.date instanceof Timestamp ? format(activity.date.toDate(), 'HH:mm') : format(new Date(), 'HH:mm');
+  const defaultTime = activity?.date instanceof Timestamp ? format(activity.date.toDate(), 'HH:mm', { locale: de }) : format(new Date(), 'HH:mm', { locale: de });
 
 
   const form = useForm<ActivityFormData>({
@@ -64,7 +65,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
 
   async function onSubmit(values: ActivityFormData) {
      if (!user || !userProfile) {
-        toast({ title: "Authentication Error", description: "You must be logged in to manage activities.", variant: "destructive"});
+        toast({ title: "Authentifizierungsfehler", description: "Du musst angemeldet sein, um Aktivitäten zu verwalten.", variant: "destructive"});
         return;
      }
     setIsLoading(true);
@@ -89,13 +90,13 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
             // For updates, we only pass the fields that can be changed
             await updateActivity(activity.id, activityPayload);
             activityId = activity.id;
-            toast({ title: "Activity Updated", description: `"${values.title}" has been updated.` });
+            toast({ title: "Aktivität aktualisiert", description: `"${values.title}" wurde aktualisiert.` });
         } else {
             // For creation, include creator and initial participant info
             const creationData: Omit<Activity, 'id' | 'createdAt'> = {
                 ...activityPayload,
                 creatorId: user.uid,
-                creatorName: userProfile.displayName ?? user.displayName ?? 'Unknown User',
+                creatorName: userProfile.displayName ?? user.displayName ?? 'Unbekannter Benutzer',
                 creatorPhotoURL: userProfile.photoURL ?? user.photoURL,
                 participants: [
                     {
@@ -106,24 +107,20 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                 ],
             };
             activityId = await createActivity(creationData);
-            toast({ title: "Activity Created", description: `"${values.title}" has been scheduled.` });
+            toast({ title: "Aktivität erstellt", description: `"${values.title}" wurde geplant.` });
         }
 
          if (onFormSubmit) {
              onFormSubmit(activityId);
          } else {
-             if (isEditing) {
-                 router.push(`/activities/${activityId}`); // Redirect to detail page after edit
-             } else {
-                 router.push('/dashboard'); // Redirect to dashboard after create
-             }
+            router.push('/dashboard'); // Redirect to dashboard after create/edit
          }
 
     } catch (error: any) {
-      console.error("Error saving activity:", error);
+      console.error("Fehler beim Speichern der Aktivität:", error);
       toast({
-        title: isEditing ? "Update Failed" : "Creation Failed",
-        description: "Could not save the activity. Please try again.",
+        title: isEditing ? "Update fehlgeschlagen" : "Erstellung fehlgeschlagen",
+        description: "Die Aktivität konnte nicht gespeichert werden. Bitte versuche es erneut.",
         variant: "destructive",
       });
     } finally {
@@ -139,9 +136,9 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Activity Title</FormLabel>
+              <FormLabel>Titel der Aktivität</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Park Playdate, Museum Visit" {...field} disabled={isLoading} />
+                <Input placeholder="z.B. Spielplatztreffen, Museumsbesuch" {...field} disabled={isLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -154,7 +151,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                 name="date"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Date</FormLabel>
+                    <FormLabel>Datum</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -167,9 +164,9 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                             disabled={isLoading}
                           >
                             {field.value ? (
-                              format(field.value, "PPP")
+                              format(field.value, "PPP", { locale: de }) // Use German locale
                             ) : (
-                              <span>Pick a date</span>
+                              <span>Wähle ein Datum</span>
                             )}
                             <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                           </Button>
@@ -177,6 +174,8 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
+                          locale={de} // Set German locale for the calendar
+                          weekStartsOn={1} // Start week on Monday (0=Sunday, 1=Monday)
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
@@ -195,8 +194,10 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                   name="time"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Time</FormLabel>
+                      <FormLabel>Uhrzeit</FormLabel>
                       <FormControl>
+                        {/* Input type="time" uses browser default which might not be 24h */}
+                        {/* Keeping it for native picker, ensure value is always HH:mm */}
                         <Input type="time" {...field} disabled={isLoading} className="w-full" />
                       </FormControl>
                       <FormMessage />
@@ -211,9 +212,9 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
           name="location"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Location (Optional)</FormLabel>
+              <FormLabel>Ort (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Central Park Playground, Science Museum Cafe" {...field} value={field.value ?? ""} disabled={isLoading} />
+                <Input placeholder="z.B. Spielplatz im Park, Café im Museum" {...field} value={field.value ?? ""} disabled={isLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -221,7 +222,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
         />
 
         <Button type="submit" disabled={isLoading} className="w-full md:w-auto">
-          {isLoading ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Activity' : 'Create Activity')}
+          {isLoading ? (isEditing ? 'Aktualisieren...' : 'Erstellen...') : (isEditing ? 'Aktivität aktualisieren' : 'Aktivität erstellen')}
         </Button>
       </form>
     </Form>

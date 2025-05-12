@@ -143,7 +143,8 @@ export default function ActivityDetailPage() {
      return <p className="text-center mt-10">Activity not found.</p>;
   }
 
-   const activityDate = activity.date instanceof Timestamp ? activity.date.toDate() : activity.date;
+   // Ensure activity.date is treated correctly, whether it's a Firestore Timestamp or already a Date
+   const activityDate = activity.date instanceof Timestamp ? activity.date.toDate() : (activity.date instanceof Date ? activity.date : null);
    const formattedDate = activityDate ? format(activityDate, "PPP") : 'Date TBD';
    const formattedTime = activityDate ? format(activityDate, "p") : 'Time TBD';
 

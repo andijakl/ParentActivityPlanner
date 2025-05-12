@@ -28,7 +28,7 @@ const formSchema = z.object({
   title: z.string().min(3, { message: "Title must be at least 3 characters." }).max(100),
   date: z.date({ required_error: "A date is required." }),
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)."}), // HH:mm format
-  location: z.string().max(100).optional().nullable(),
+  location: z.string().max(100).optional().default("").transform(value => value === "" ? null : value), // Ensure empty string becomes null
   // description: z.string().max(500).optional().nullable(),
 });
 
@@ -79,7 +79,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
         const activityPayload = {
             title: values.title,
             date: Timestamp.fromDate(combinedDateTime),
-            location: values.location || null,
+            location: values.location, // Already transformed to null if empty by Zod
             // description: values.description || null,
         };
 
@@ -227,4 +227,3 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
     </Form>
   );
 }
-```

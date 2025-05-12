@@ -26,6 +26,7 @@ import type {
   Activity, ActivityClient,
   Friend,
   Invitation, InvitationClient,
+  CreateActivityData, UpdateActivityData, // Import DTO types
 } from "@/lib/types";
 import { v4 as uuidv4 } from 'uuid'; // For generating unique invite codes
 
@@ -116,9 +117,6 @@ export const handleSignOut = async (): Promise<void> => {
 
 
 // --- Activities ---
-// Data for creating an activity, expects date to be a Timestamp
-export type CreateActivityData = Omit<Activity, 'id' | 'createdAt'>;
-
 export const createActivity = async (activityData: CreateActivityData): Promise<string> => {
    if (!db) {
        console.error("Firestore (db) is not initialized. Cannot create activity.");
@@ -148,9 +146,6 @@ export const getActivity = async (activityId: string): Promise<ActivityClient | 
         return null;
     }
 };
-
-// Data for updating, date should be Timestamp if provided
-export type UpdateActivityData = Partial<Omit<Activity, 'id' | 'createdAt' | 'creatorId' | 'creatorName' | 'creatorPhotoURL' | 'participants'>>;
 
 export const updateActivity = async (activityId: string, data: UpdateActivityData): Promise<void> => {
     if (!db) {
@@ -338,3 +333,4 @@ export const getFriends = async (userId: string): Promise<Friend[]> => {
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => doc.data() as Friend);
 };
+

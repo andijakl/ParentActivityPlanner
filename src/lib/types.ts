@@ -12,7 +12,7 @@ interface BaseUserProfile {
 interface BaseActivity {
   id: string;
   title: string;
-  location?: string | null;
+  location?: string | null; // Changed from string | undefined to string | null
   creatorId: string;
   creatorName: string;
   creatorPhotoURL?: string | null;
@@ -57,6 +57,15 @@ export interface InvitationClient extends BaseInvitation {
   expiresAt?: string; // ISO Date string or undefined
 }
 
+// --- Data Transfer Object types for service functions ---
+
+// Data for creating an activity, expects date to be a Timestamp
+export type CreateActivityData = Omit<Activity, 'id' | 'createdAt'>;
+
+// Data for updating, date should be Timestamp if provided
+export type UpdateActivityData = Partial<Omit<Activity, 'id' | 'createdAt' | 'creatorId' | 'creatorName' | 'creatorPhotoURL' | 'participants'>>;
+
+
 // --- Other types ---
 
 export interface Friend {
@@ -64,3 +73,4 @@ export interface Friend {
     displayName: string | null;
     photoURL?: string | null;
 }
+

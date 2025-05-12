@@ -3,21 +3,30 @@
 
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from "firebase/firestore";
-// Import config elements individually, including error state and config check
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, firebaseInitializationError, isFirebaseConfigured } from '@/lib/firebase/config';
 import type { UserProfile } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
 
 interface AuthContextType {
   user: FirebaseUser | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  error: Error | null; // Can now include initialization error
-  isFirebaseInitialized: boolean; // Reflects actual initialization status
+  error: Error | null;
+  isFirebaseInitialized: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Provide a default context value matching the type, used when context is undefined initially.
+const defaultAuthContextValue: AuthContextType = {
+    user: null,
+    userProfile: null,
+    loading: true, // Assume loading initially
+    error: firebaseInitializationError, // Start with potential init error
+    isFirebaseInitialized: isFirebaseConfigured() && !firebaseInitializationError,
+};
+
+
+const AuthContext = createContext<AuthContextType>(defaultAuthContextValue);
+
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -27,9 +36,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  // Initialize error state with potential initialization error from config.ts
   const [error, setError] = useState<Error | null>(firebaseInitializationError);
-  // Determine initialization status based on config check and error state
   const isFirebaseInitialized = isFirebaseConfigured() && !firebaseInitializationError;
 
   useEffect(() => {
@@ -38,6 +45,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.warn("Firebase is not initialized or auth instance is null. Skipping auth state listener.");
         // Error state is already set from initialization check in config.ts
         setLoading(false); // Stop loading as we can't proceed
+        // Update context values for consumers
+        setUser(null);
+        setUserProfile(null);
+        setError(firebaseInitializationError); // Ensure error is set
         return;
     }
 
@@ -51,18 +62,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (firebaseUser && db) { // Check db again just in case
         try {
           const userDocRef = doc(db, "users", firebaseUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
+          let userDocSnap = await getDoc(userDocRef);
 
-          if (userDocSnap.exists()) {
-            setUserProfile(userDocSnap.data() as UserProfile);
-            // Clear previous fetch error if successful, but preserve initialization error if it exists
-            if (!firebaseInitializationError) setError(null);
-          } else {
-            console.log("User profile document not found for UID:", firebaseUser.uid);
-            setUserProfile(null);
-             // Clear fetch error if profile just not found yet, preserve init error
-            if (!firebaseInitializationError) setError(null);
-          }
+           // If profile doesn't exist, create a basic one (e.g., after Google sign-in first time)
+           if (!userDocSnap.exists()) {
+                console.log("User profile not found, creating one for:", firebaseUser.uid);
+                const newUserProfile: UserProfile = {
+                    uid: firebaseUser.uid,
+                    email: firebaseUser.email,
+                    displayName: firebaseUser.displayName,
+                    photoURL: firebaseUser.photoURL,
+                    createdAt: serverTimestamp(),
+                    childNickname: '', // Initialize optional fields
+                 };
+                 try {
+                    await setDoc(userDocRef, newUserProfile);
+                    // Re-fetch the snapshot after creation to get the server timestamp resolved
+                    userDocSnap = await getDoc(userDocRef);
+                    if (userDocSnap.exists()) {
+                         setUserProfile(userDocSnap.data() as UserProfile);
+                         console.log("Successfully created and fetched profile for:", firebaseUser.uid);
+                    } else {
+                         // This case should be rare after successful setDoc
+                         console.error("Failed to fetch profile immediately after creation for:", firebaseUser.uid);
+                         setUserProfile(null); // Fallback
+                    }
+                 } catch (createError) {
+                     console.error("Error creating user profile:", createError);
+                     setError(firebaseInitializationError || (createError instanceof Error ? createError : new Error("Failed to create profile")));
+                     setUserProfile(null);
+                 }
+           } else {
+                setUserProfile(userDocSnap.data() as UserProfile);
+           }
+
+          // Clear previous fetch error if successful, but preserve initialization error if it exists
+          if (!firebaseInitializationError) setError(null);
+
         } catch (fetchError) {
           console.error("Error fetching user profile:", fetchError);
           // Set fetch error, but prioritize showing initialization error if it exists
@@ -88,36 +124,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Cleanup subscription on unmount
     return () => unsubscribe();
   // Dependency array includes isFirebaseInitialized and auth instance check
-  }, [isFirebaseInitialized, auth]); // Rerun if initialization status changes
+  }, [isFirebaseInitialized]); // Rerun if initialization status changes
+
 
   // --- Render Logic ---
+  // AuthProvider *only* provides the context value.
+  // It does NOT render loading states or error messages directly.
+  // Consumers (like AuthProviderComponent) will use the context values
+  // (loading, error, isFirebaseInitialized) to decide what to render.
 
-  // Display specific message if Firebase isn't configured/initialized (takes precedence)
-  if (!isFirebaseInitialized) {
-       // Error state should hold the initialization error message
-       return (
-           <div className="flex items-center justify-center min-h-screen text-center text-destructive p-4">
-               <p>{error?.message || "Application configuration error. Please check setup or contact support."}</p>
-               {/* More user-friendly message */}
-               {/* <p>Oops! Something went wrong with the setup. Please contact support.</p> */}
-           </div>
-       );
-  }
+  // Important: The value passed to the provider must be memoized or stable
+  // to prevent unnecessary re-renders of consumers.
+  const contextValue = React.useMemo(() => ({
+      user,
+      userProfile,
+      loading,
+      error,
+      isFirebaseInitialized
+  }), [user, userProfile, loading, error, isFirebaseInitialized]);
 
-  // Display loading state while checking auth state (only if Firebase initialized correctly)
-  if (loading) {
-     return (
-       <div className="flex items-center justify-center min-h-screen">
-         <Skeleton className="h-12 w-12 rounded-full" />
-         <Skeleton className="h-4 w-[250px] ml-4" />
-       </div>
-     );
-   }
 
-  // Render children if initialized and not loading
-  // Pass the potentially existing initialization error down via context
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, error, isFirebaseInitialized }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
@@ -126,6 +154,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 // useAuth hook remains the same
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
+  // No need to check for undefined if we provide a default value to createContext,
+  // but it's safer to keep the check in case the default value setup changes.
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }

@@ -1,3 +1,4 @@
+
 // src/app/(app)/activities/[id]/edit/page.tsx
 "use client";
 
@@ -126,4 +127,3 @@ export default function EditActivityPage() {
     </div>
   );
 }
-```

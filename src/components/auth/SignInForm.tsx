@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config'; // auth and db can be null
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp } from "firebase/firestore"; // Removed setDoc as createUserProfile will be used
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -17,7 +17,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
-import type { UserProfile } from '@/lib/types';
+import type { UserProfile } from '@/lib/types'; // UserProfile for type reference
+import { createUserProfile } from '@/lib/firebase/services'; // Import createUserProfile
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -82,16 +83,16 @@ export function SignInForm() {
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-        const newUserProfile: UserProfile = {
+        // Prepare data for UserProfile (without createdAt, service adds it)
+        const newUserProfileData: Omit<UserProfile, 'createdAt'> = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
-          createdAt: serverTimestamp(),
           childNickname: '', // Initialize optional fields
         };
-        await setDoc(userDocRef, newUserProfile);
-         console.log("Created new user profile for Google Sign-In user:", user.uid);
+        await createUserProfile(newUserProfileData); // Use the service function
+        console.log("Created new user profile for Google Sign-In user:", user.uid);
       } else {
           console.log("User profile already exists for Google Sign-In user:", user.uid);
       }

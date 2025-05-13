@@ -35,6 +35,10 @@ export default function AuthProviderComponent({ children }: { children: React.Re
         router.replace('/dashboard');
       } else if (!user && !isPublicRoute) {
         router.replace('/signin');
+      } else if (user && !isAuthRoute && !isPublicRoute) {
+        // User is logged in and on a protected app route - allow them to stay
+        // No redirection needed here
+
       }
     }
   }, [user, loading, router, pathname, isAuthRoute, isPublicRoute, firebaseConfigError, firebaseAuthError]);

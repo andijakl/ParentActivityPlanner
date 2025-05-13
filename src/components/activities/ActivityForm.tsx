@@ -102,6 +102,7 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
                 participants: [
                     {
                         uid: user.uid,
+<<<<<<< HEAD
                         name: userProfile.displayName ?? user.displayName ?? 'Unknown User',
                         photoURL: userProfile.photoURL ?? user.photoURL,
                     }
@@ -110,6 +111,17 @@ export function ActivityForm({ activity, onFormSubmit }: ActivityFormProps) {
             activityId = await createActivity(creationData);
             toast({ title: "Activity Created", description: `"${values.title}" has been scheduled.` });
         }
+=======
+                        name: userProfile.displayName ?? user.displayName ?? 'Unknown User',
+                        photoURL: userProfile.photoURL ?? user.photoURL,
+                    },
+                ],
+                participantUids: [user.uid], // Initialize with creator's UID
+            };
+            activityId = await createActivity(creationData);
+            toast({ title: "Activity Created", description: `"${values.title}" has been scheduled.` });
+        }
+>>>>>>> develop
 
          if (onFormSubmit) {
              onFormSubmit(activityId);

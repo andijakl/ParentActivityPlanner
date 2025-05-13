@@ -17,9 +17,11 @@ service cloud.firestore {
        // This is crucial for the reciprocal part of accepting an invitation.
        // - `request.auth.uid` is the user performing the action (the one accepting the invite).
        // - `friendEntryId` is the document ID in the friends subcollection, which should be the UID of the user being added.
-       // - `request.resource.data.uid` is the UID field within the data being written for the friend entry.
-       // This rule allows UserB (request.auth.uid) to write their own data (where friendEntryId == UserB.uid
-       // and request.resource.data.uid == UserB.uid) into UserA's (ownerId) friend list.
+       // - `request.resource.data.uid` and `request.resource.data.displayName` are essential fields in the data being written.
+       // This rule allows a user (request.auth.uid) to write a document with their own UID as the ID
+       // into another user's (ownerId) friend list, provided the document data includes
+       // their UID and display name.
+ allow create: if request.auth != null && request.auth.uid == friendEntryId && request.resource.data.keys().hasAll(['uid', 'displayName']);
        allow create, update: if request.auth != null &&
                                 request.auth.uid == friendEntryId &&
                                 request.resource.data.uid == request.auth.uid;

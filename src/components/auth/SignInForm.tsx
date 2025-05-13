@@ -1,24 +1,25 @@
+// src/components/auth/SignInForm.tsx
 "use client";
 
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config'; // auth and db can be null
-import { doc, getDoc, serverTimestamp } from "firebase/firestore"; // Removed setDoc as createUserProfile will be used
-import { useRouter } from 'next/navigation';
+import { doc, getDoc } from "firebase/firestore";
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+// import { Label } from "@/components/ui/label"; // Not directly used
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
-import type { UserProfile } from '@/lib/types'; // UserProfile for type reference
-import { createUserProfile } from '@/lib/firebase/services'; // Import createUserProfile
+import type { UserProfile, InvitationClient } from '@/lib/types'; // UserProfile for type reference
+import { createUserProfile, addFriend, deleteInvitation, getInvitation } from '@/lib/firebase/services'; // Import services
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -27,6 +28,8 @@ const formSchema = z.object({
 
 export function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteCode = searchParams.get('invite');
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
@@ -39,6 +42,46 @@ export function SignInForm() {
     },
   });
 
+  const handleInviteAfterSignIn = async (signedInUser: FirebaseUser, code: string) => {
+    if (!db) {
+        console.error("Firestore (db) is not initialized. Cannot handle invite.");
+        toast({ title: "Invite Error", description: "Database service unavailable.", variant: "destructive" });
+        return;
+    }
+    try {
+        const invitation: InvitationClient | null = await getInvitation(code);
+
+        if (!invitation) {
+            toast({ title: "Invite Not Found", description: "The invite code is invalid or expired.", variant: "destructive" });
+            return;
+        }
+        if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+            toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
+            return;
+        }
+        if (signedInUser.uid === invitation.inviterId) {
+            toast({ title: "Cannot Add Self", description: "You cannot accept your own invitation.", variant: "destructive" });
+            return;
+        }
+
+        const friendRef = doc(db, `users/${signedInUser.uid}/friends/${invitation.inviterId}`);
+        const friendSnap = await getDoc(friendRef);
+
+        if (!friendSnap.exists()) {
+            await addFriend(signedInUser.uid, invitation.inviterId);
+            await deleteInvitation(code);
+            toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
+        } else {
+            toast({ title: "Already Friends", description: "You are already connected with this friend." });
+            await deleteInvitation(code); 
+        }
+    } catch (error) {
+        console.error("Error handling invite code after sign-in:", error);
+        toast({ title: "Invite Error", description: "Could not process the invite code.", variant: "destructive" });
+    }
+};
+
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!auth) {
         toast({ title: "Error", description: "Authentication service is unavailable.", variant: "destructive"});
@@ -46,9 +89,13 @@ export function SignInForm() {
     }
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
       toast({ title: "Sign In Successful", description: "Welcome back!" });
-      router.push('/dashboard'); // Redirect to dashboard or desired page
+
+      if (inviteCode) {
+        await handleInviteAfterSignIn(userCredential.user, inviteCode);
+      }
+      router.push('/dashboard'); 
     } catch (error: any) {
       console.error("Sign in error:", error);
       let description = "An unexpected error occurred. Please try again.";
@@ -78,27 +125,27 @@ export function SignInForm() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Check if user profile exists, create if not
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-        // Prepare data for UserProfile (without createdAt, service adds it)
         const newUserProfileData: Omit<UserProfile, 'createdAt'> = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
-          childNickname: '', // Initialize optional fields
+          childNickname: '', 
         };
-        await createUserProfile(newUserProfileData); // Use the service function
+        await createUserProfile(newUserProfileData); 
         console.log("Created new user profile for Google Sign-In user:", user.uid);
       } else {
           console.log("User profile already exists for Google Sign-In user:", user.uid);
       }
 
-
       toast({ title: "Google Sign In Successful", description: `Welcome, ${user.displayName}!` });
+      if (inviteCode) {
+        await handleInviteAfterSignIn(user, inviteCode);
+      }
       router.push('/dashboard');
     } catch (error: any) {
       console.error("Google Sign in error:", error);
@@ -123,6 +170,11 @@ export function SignInForm() {
       <CardHeader>
         <CardTitle className="text-2xl">Sign In</CardTitle>
         <CardDescription>Enter your email and password to access your account.</CardDescription>
+        {inviteCode && (
+            <CardDescription className="text-primary pt-2">
+                You've been invited! Sign in to connect.
+            </CardDescription>
+        )}
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -170,7 +222,7 @@ export function SignInForm() {
       </CardContent>
        <CardFooter className="flex justify-center text-sm">
         <p>Don't have an account?&nbsp;</p>
-         <Link href="/signup" className="font-medium text-primary hover:underline underline-offset-4">
+         <Link href={inviteCode ? `/signup?invite=${inviteCode}` : "/signup"} className="font-medium text-primary hover:underline underline-offset-4">
            Sign Up
          </Link>
        </CardFooter>

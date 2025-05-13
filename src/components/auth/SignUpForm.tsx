@@ -5,9 +5,9 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config';
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"; // Keep setDoc for user profile
+import { doc, getDoc } from "firebase/firestore"; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -54,13 +54,12 @@ export function SignUpForm() {
           return;
       }
     try {
-      const invitation: InvitationClient | null = await getInvitation(code); // Returns InvitationClient
+      const invitation: InvitationClient | null = await getInvitation(code); 
 
       if (!invitation) {
           toast({ title: "Invite Not Found", description: "The invite code is invalid or expired.", variant: "destructive" });
           return;
       }
-       // Optional: Check invitation.expiresAt (string)
        if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
         toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
         return;
@@ -80,7 +79,7 @@ export function SignUpForm() {
             toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
         } else {
             toast({ title: "Already Friends", description: "You are already connected with this friend." });
-            await deleteInvitation(code); // Still delete invite if already friends
+            await deleteInvitation(code); 
         }
     } catch (error) {
       console.error("Error handling invite code:", error);
@@ -100,7 +99,6 @@ export function SignUpForm() {
 
       await updateProfile(user, { displayName: values.displayName });
 
-      // Prepare data for FirestoreUserProfile (without createdAt, service adds it)
       const newUserProfileData: Omit<FirestoreUserProfile, 'createdAt'> = {
         uid: user.uid,
         email: user.email,
@@ -108,7 +106,7 @@ export function SignUpForm() {
         photoURL: user.photoURL,
         childNickname: values.childNickname || '',
       };
-      await createUserProfile(newUserProfileData); // createUserProfile handles serverTimestamp
+      await createUserProfile(newUserProfileData); 
 
       toast({ title: "Sign Up Successful", description: "Your account has been created." });
 
@@ -271,7 +269,7 @@ export function SignUpForm() {
       </CardContent>
       <CardFooter className="flex justify-center text-sm">
         <p>Already have an account?&nbsp;</p>
-        <Link href="/signin" className="font-medium text-primary hover:underline underline-offset-4">
+        <Link href={inviteCode ? `/signin?invite=${inviteCode}` : "/signin"} className="font-medium text-primary hover:underline underline-offset-4">
            Sign In
         </Link>
        </CardFooter>

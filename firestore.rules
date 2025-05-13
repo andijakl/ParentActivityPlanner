@@ -3,38 +3,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users: Can read own data, can create profile if not existing, can update own profile
+    // Users: Authenticated users can read any profile. Only the owner can update their own profile.
+    // Anyone authenticated can create a user profile (typically on sign-up).
     match /users/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null; // Allow creation if logged in
+      allow read: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
     }
 
-    // Friends subcollection:
-    match /users/{ownerId}/friends/{friendEntryId} {
-       // Rule 1: The owner of the friends list can read, write, and delete entries in their own list.
-       allow read, write, delete: if request.auth != null && request.auth.uid == ownerId;
-       // Rule 2: Allow a user to add THEMSELVES to another user's (ownerId's) friend list.
-       // This is crucial for the reciprocal part of accepting an invitation.
-       // - `request.auth.uid` is the user performing the action (the one accepting the invite).
-       // - `friendEntryId` is the document ID in the friends subcollection, which should be the UID of the user being added.
-       // - `request.resource.data.uid` and `request.resource.data.displayName` are essential fields in the data being written.
-       // This rule allows a user (request.auth.uid) to write a document with their own UID as the ID
-       // into another user's (ownerId) friend list, provided the document data includes
-       // their UID and display name.
- allow create: if request.auth != null && request.auth.uid == friendEntryId && request.resource.data.keys().hasAll(['uid', 'displayName']);
-       allow create, update: if request.auth != null &&
-                                request.auth.uid == friendEntryId &&
-                                request.resource.data.uid == request.auth.uid;
+    // Friends subcollection: Can manage own friends list
+    match /users/{userId}/friends/{friendId} {
+       allow read, write, delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // Activities: Logged-in users can read/create. Only creator can update/delete.
     // Participants can be updated by any logged-in user (for joining/leaving).
     match /activities/{activityId} {
       allow read, create: if request.auth != null;
-      // Allow update only if it's the creator OR if only the participants field is changing
+      // Allow update only if it's the creator OR if only the participants/participantUids field is changing
       allow update: if request.auth != null && (
                       resource.data.creatorId == request.auth.uid ||
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
+                      (request.resource.data.diff(resource.data).affectedKeys().hasAny(['participants', 'participantUids']) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'participantUids']))
                     );
       // Allow delete only by the creator
       allow delete: if request.auth != null && resource.data.creatorId == request.auth.uid;

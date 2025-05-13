@@ -95,10 +95,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users: Can read own data, can create profile if not existing, can update own profile
+    // Users: Authenticated users can read any profile. Only the owner can update their own profile.
+    // Anyone authenticated can create a user profile (typically on sign-up).
     match /users/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null; // Allow creation if logged in
+      allow read: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
     }
 
     // Friends subcollection: Can manage own friends list
@@ -110,10 +112,11 @@ service cloud.firestore {
     // Participants can be updated by any logged-in user (for joining/leaving).
     match /activities/{activityId} {
       allow read, create: if request.auth != null;
-      // Allow update only if it's the creator OR if only the participants field is changing
+      // Allow update only if it's the creator OR if only the participants/participantUids field is changing
       allow update: if request.auth != null && (
                       resource.data.creatorId == request.auth.uid ||
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
+                      (request.resource.data.diff(resource.data).affectedKeys().hasAny(['participants', 'participantUids']) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'participantUids']))
                     );
       // Allow delete only by the creator
       allow delete: if request.auth != null && resource.data.creatorId == request.auth.uid;

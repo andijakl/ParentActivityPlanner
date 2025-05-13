@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth'; 
 import { getFriends, generateInviteCode, removeFriend, getInvitation, addFriend, deleteInvitation } from '@/lib/firebase/services';
 import type { Friend, InvitationClient } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -361,4 +361,5 @@ function FriendsListSkeleton() {
         </div>
      )
 }
+
 

@@ -31,13 +31,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     setIsFirebaseSetupAttempted(true); // Mark that setup has been attempted
 
-    if (!isFirebaseConfigured() || !auth) {
-      // If Firebase is not configured (due to missing .env vars, etc.),
-      // configInitializationError will be set in firebase/config.ts.
-      // We don't need to run onAuthStateChanged.
+    // If Firebase itself had a configuration error, or is not configured, or auth service is unavailable,
+    // do not proceed with onAuthStateChanged.
+    if (configInitializationError || !isFirebaseConfigured() || !auth) {
       setUser(null);
       setUserProfile(null);
       setLoading(false);
+      // firebaseConfigError is already set from the import, so AuthProviderComponent can display it.
       return; // Exit early
     }
 
@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-  }, []); // Empty dependency array ensures this runs once on mount
+  }, []); // Empty dependency array: runs once on mount. configInitializationError is stable.
 
   return (
     <AuthContext.Provider value={{
@@ -85,3 +85,4 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     </AuthContext.Provider>
   );
 };
+

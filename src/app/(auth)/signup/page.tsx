@@ -1,6 +1,6 @@
 // src/app/(auth)/signup/page.tsx
 import { SignUpForm } from '@/components/auth/SignUpForm';
-import AuthProviderComponent from '@/components/auth/AuthProviderComponent';
+import AuthProviderComponent from '@/components/auth/AuthProviderComponent'; // Ensure this path is correct
 import { Suspense } from 'react'; // Needed for useSearchParams in child component
 
 // Helper component to ensure SignUpForm is rendered within Suspense boundary

@@ -213,52 +213,22 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
         return getDocs(qCreator);
      });
      
-     // Fetch activities where current user is a participant (and not necessarily the creator)
-     // This needs a robust way to query participants. Using a 'participantUids' array field would be best.
-     // For now, a simplified query or client-side filtering after fetching creator-based activities might be needed.
-     // The current participant query is complex and error-prone due to matching object structures.
-     // We'll focus on creator-based activities and those the user explicitly joined (handled by `arrayUnion` on participant list).
-     // To get activities a user is *any* participant in (not just creator), would typically require
-     // a query like `where("participantUids", "array-contains", uid)`. This requires schema change.
-     // Given current structure, we can fetch activities created by user/friends, and client can filter if needed.
-     // Or, augment dashboard to also fetch activities where user is *specifically* in `participants` array.
-     // This part is simplified here to avoid query complexity without schema change.
-
-     const participantActivityPromises = chunks.map(chunk => {
-        // This query attempts to find activities where any of the UIDs in the chunk are participants.
-        // Note: Firestore's "array-contains-any" works on simple array elements, not complex objects within an array directly in this manner.
-        // A better approach for querying participants would be a `participantUids: string[]` field.
-        // For this example, we'll assume a simplified scenario or that participants are primarily creators or explicitly joined.
-        // This query below is unlikely to work as intended for matching participant objects.
-        // const qParticipant = query(
-        //   activitiesRef,
-        //   where("participants", "array-contains-any", chunk.map(id => ({ uid: id }))), // THIS IS PROBLEMATIC for objects
-        //   where("date", ">=", now),
-        //   orderBy("date", "asc")
-        // );
-        // return getDocs(qParticipant);
-
-        // A more direct (but potentially numerous) way if not chunking or using a different data model:
-        if (chunk.includes(uid)) { // Only run this specific query for the chunk containing the current user
+    const participantActivityPromises = chunks.map(async chunk => {
+        if (chunk.includes(uid)) {
+             const currentUserProfileForQuery = await getUserProfile(uid);
              const qUserIsParticipant = query(
                  activitiesRef,
-                 // This relies on the exact structure of the participant object, which can be fragile.
-                 // It's better if 'participants' was an array of UIDs or if we had a 'participantUids' field.
                  where("participants", "array-contains", {
                      uid: uid,
-                     // Name and photoURL might change or not be perfectly synced, making this unreliable.
-                     // The robust solution is a `participantUids` array.
-                     // For now, this will only match if the stored participant object for UID has matching name/photo (or null if that's what's stored).
-                     // This is a known limitation of the current query structure.
-                     name: (await getUserProfile(uid))?.displayName ?? null, // Fetch current name
-                     photoURL: (await getUserProfile(uid))?.photoURL ?? null // Fetch current photoURL
+                     name: currentUserProfileForQuery?.displayName ?? null,
+                     photoURL: currentUserProfileForQuery?.photoURL ?? null
                  }),
                  where("date", ">=", now),
                  orderBy("date", "asc")
              );
              return getDocs(qUserIsParticipant);
         }
-        return Promise.resolve(null); // Return null promise for chunks not containing the user to avoid unnecessary complex queries for friends' participation
+        return Promise.resolve(null); 
      });
 
 

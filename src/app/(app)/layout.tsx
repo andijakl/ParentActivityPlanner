@@ -3,7 +3,7 @@ import React from 'react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AppHeader } from '@/components/layout/AppHeader';
-import AuthProviderComponent from '@/components/auth/AuthProviderComponent'; // Import the client component
+import AuthProviderComponent from '@/components/auth/AuthProviderComponent'; // Ensure this path is correct
 
 export default function AppLayout({
   children,

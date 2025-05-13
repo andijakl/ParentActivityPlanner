@@ -1,4 +1,3 @@
-
 // src/app/(app)/friends/page.tsx
 "use client";
 
@@ -133,19 +132,20 @@ export default function FriendsPage() {
             setIsAcceptingEnteredInvite(false);
             return;
         }
-
+        
+        console.log(`[FriendsPage] handleAcceptEnteredInvite: Current user UID: ${user.uid}, Inviter ID from code ${invitation.inviterId}`);
         await addFriend(user.uid, invitation.inviterId);
-        await deleteInvitation(enteredInviteCode.trim());
+        await deleteInvitation(enteredInviteCode.trim()); // Delete invitation after successful friend add attempt
         toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
         setEnteredInviteCode(''); 
         fetchFriends(); 
 
     } catch (error: any) {
-        console.error("Error accepting entered invite code:", error);
+        console.error("[FriendsPage] Error accepting entered invite code:", error);
         if (error.code === 'already-friends') {
              toast({ title: "Already Friends", description: "You are already connected with this user." });
              try { await deleteInvitation(enteredInviteCode.trim()); } catch (delErr) { /* ignore */ }
-             fetchFriends();
+             fetchFriends(); // Refresh friends list even if already friends
         } else {
             toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || 'An unexpected error occurred.'}`, variant: "destructive" });
         }

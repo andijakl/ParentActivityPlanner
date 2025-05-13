@@ -1,4 +1,3 @@
-
 // src/lib/firebase/services.ts
 import {
   doc,
@@ -72,14 +71,17 @@ const toInvitationClient = (invitation: Invitation): InvitationClient => {
 // --- User Profile ---
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+  console.log(`[getUserProfile] Attempting to fetch profile for UID: ${uid}`);
   if (!db) {
-      console.error("Firestore (db) is not initialized. Cannot get user profile.");
+      console.error(`[getUserProfile] Firestore (db) is not initialized for UID: ${uid}.`);
       throw new Error("Database service unavailable for getUserProfile.");
   }
   const userDocRef = doc(db, "users", uid);
   try {
+    console.log(`[getUserProfile] Executing getDoc for users/${uid}`);
     const userDocSnap = await getDoc(userDocRef);
     if (userDocSnap.exists()) {
+      console.log(`[getUserProfile] Profile found for UID: ${uid}`, userDocSnap.data());
       const data = userDocSnap.data();
       return {
           uid: data.uid,
@@ -87,20 +89,22 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
           displayName: data.displayName ?? null,
           photoURL: data.photoURL ?? null,
           childNickname: data.childNickname ?? null,
-          createdAt: data.createdAt as Timestamp,
+          createdAt: data.createdAt as Timestamp, // Assuming createdAt is always a Timestamp
       };
     } else {
+      console.log(`[getUserProfile] Profile NOT found for UID: ${uid}`);
       return null;
     }
   } catch (error) {
-    console.error(`Error fetching user profile for ${uid}:`, error);
-    throw new Error(`Failed to fetch user profile: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[getUserProfile] Firebase error fetching user profile for ${uid}:`, error);
+    if (error instanceof Error && 'code' in error) {
+      console.error(`[getUserProfile] Firebase error code: ${(error as any).code}, message: ${error.message}`);
+    }
+    throw new Error(`Failed to fetch user profile for ${uid}: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 
 export const fetchUserProfileForClient = async (uid: string): Promise<UserProfileClient | null> => {
-    // This function now relies on getUserProfile which throws on error.
-    // The caller (AuthContext) should handle this error.
     const profile = await getUserProfile(uid);
     return profile ? toUserProfileClient(profile) : null;
 };
@@ -176,9 +180,9 @@ export const createActivity = async (activityData: CreateActivityData): Promise<
   const newActivityForDb: Activity = {
     ...activityData,
     id: newActivityRef.id,
-    location: activityData.location === undefined ? null : activityData.location, // Ensure location is null if undefined
+    location: activityData.location === "" ? null : activityData.location, // Ensure location is null if empty string
     createdAt: serverTimestamp() as Timestamp,
-    // participantUids: [activityData.creatorId] // Initialize with creator
+    // participantUids should be part of CreateActivityData
   };
   try {
     await setDoc(newActivityRef, newActivityForDb);
@@ -216,9 +220,10 @@ export const updateActivity = async (activityId: string, data: UpdateActivityDat
     }
     const activityDocRef = doc(db, "activities", activityId);
     const updateData: { [key: string]: any } = { ...data };
-    if (data.location !== undefined) { // Ensure location is explicitly set to null if it was an empty string or meant to be removed
-        updateData.location = data.location;
+    if (data.location !== undefined) {
+        updateData.location = data.location === "" ? null : data.location;
     }
+
 
     try {
         await updateDoc(activityDocRef, updateData);
@@ -251,85 +256,67 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
 
     let userAndFriendIds: string[];
     try {
-        const friends = await getFriends(uid); // getFriends now throws on error
+        const friends = await getFriends(uid);
         const friendIds = friends.map(f => f.uid);
         userAndFriendIds = Array.from(new Set([uid, ...friendIds]));
     } catch (error) {
         console.error("getDashboardActivities: Failed to get friends list. Proceeding with user's activities only.", error);
-        userAndFriendIds = [uid]; // Fallback: fetch only user's own created activities
-                                   // If even this isn't desired, rethrow the error or throw a new one.
+        userAndFriendIds = [uid];
     }
 
     if (userAndFriendIds.length === 0) {
-        console.warn("getDashboardActivities: No user or friend IDs to query for (uid might be empty or friends fetch failed without fallback).");
+        console.warn("getDashboardActivities: No user or friend IDs to query for.");
         return [];
     }
 
     const activitiesRef = collection(db, "activities");
     const now = Timestamp.now();
-    const fetchedActivities: ActivityClient[] = [];
+    
+    const activityPromises: Promise<QuerySnapshot<DocumentData>>[] = [];
+    const participantActivityPromises: Promise<QuerySnapshot<DocumentData> | null>[] = [];
 
-    // Firestore 'in' query limit is 30
-    const chunkSize = 30;
+    const chunkSize = 30; // Firestore 'in' query limit, also for 'array-contains-any'
     for (let i = 0; i < userAndFriendIds.length; i += chunkSize) {
         const chunk = userAndFriendIds.slice(i, i + chunkSize);
         if (chunk.length === 0) continue;
 
-        try {
-            // Query for activities created by users in the current chunk
-            const qCreator = query(
-                activitiesRef,
-                where("creatorId", "in", chunk),
-                where("date", ">=", now),
-                orderBy("date", "asc")
-            );
-            const creatorSnapshot = await getDocs(qCreator);
-            creatorSnapshot.docs.forEach(doc => {
-                fetchedActivities.push(toActivityClient(doc.data() as Activity));
-            });
-
-            // Query for activities where users in the current chunk are participants (using participantUids)
-            // This requires 'participantUids' array field in your Activity documents.
-            // If 'participantUids' is not consistently populated, this query might not return expected results for participation.
-            // For now, we assume it might exist. If not, this query will just not find matches based on this criteria.
-            // A more robust solution would ensure participantUids is always updated.
-            // The current structure of 'participants' (array of objects) is hard to query efficiently for "is uid in this array of objects".
-            // if (uid in chunk) { // This doesn't make sense here, chunk is list of creators to check
-            // If we want activities where current user `uid` is a participant, and creator is in `chunk`.
-            // This becomes very complex. Simpler to query participation separately if needed.
-            // }
-
-        } catch (queryError) {
-            console.error("getDashboardActivities: Error fetching activities chunk:", queryError);
-            // Option: re-throw to fail the entire operation, or log and continue for partial data.
-            // For now, log and continue so some activities might still load.
-            // throw new Error(`Failed to fetch activities for chunk: ${queryError.message}`);
-        }
-    }
-
-    // Fetch activities where the current user `uid` is a participant (if participantUids field exists and is used)
-    // This is separate from the creator-based fetch to ensure we get all participations of current user
-    // Assuming 'Activity' type has 'participantUids?: string[]'
-    try {
-        const qParticipant = query(
+        // Activities created by users in the chunk
+        const qCreator = query(
             activitiesRef,
-            where("participantUids", "array-contains", uid),
+            where("creatorId", "in", chunk),
             where("date", ">=", now)
-            // orderBy("date", "asc") // Cannot have inequality on 'date' and array-contains with orderBy on different field without composite index
+            // orderBy("date", "asc") // Cannot have inequality on 'date' and 'in' on 'creatorId' with orderBy on 'date' without composite index
         );
-        const participantSnapshot = await getDocs(qParticipant);
-        participantSnapshot.docs.forEach(doc => {
-            fetchedActivities.push(toActivityClient(doc.data() as Activity));
-        });
-    } catch (participantQueryError) {
-        console.error("getDashboardActivities: Error fetching activities where user is participant:", participantQueryError);
-        // Log and continue.
+        activityPromises.push(getDocs(qCreator));
     }
+    
+    // Activities where the current user `uid` is a participant
+    // This must be done separately if participantUids is used with array-contains
+    const qParticipant = query(
+        activitiesRef,
+        where("participantUids", "array-contains", uid),
+        where("date", ">=", now)
+        // orderBy("date", "asc") // Cannot have inequality on 'date' and array-contains with orderBy on 'date' without composite index
+    );
+    participantActivityPromises.push(getDocs(qParticipant).catch(err => {
+        console.error("getDashboardActivities: Error fetching activities where user is participant (array-contains):", err);
+        return null; // Allow other queries to proceed
+    }));
 
 
-    // Deduplicate activities (if an activity was created by user AND user is in participantUids)
-    const uniqueActivities = Array.from(new Map(fetchedActivities.map(act => [act.id, act])).values());
-    // Sort all activities by date
+    const querySnapshots = await Promise.all(activityPromises);
+    const participantQuerySnapshots = (await Promise.all(participantActivityPromises)).filter(s => s !== null) as QuerySnapshot<DocumentData>[];
+
+
+    let activities = querySnapshots.flatMap(snapshot =>
+        snapshot.docs.map(doc => toActivityClient(doc.data() as Activity))
+    );
+    
+    participantQuerySnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => activities.push(toActivityClient(doc.data() as Activity)));
+    });
+
+    const uniqueActivities = Array.from(new Map(activities.map(act => [act.id, act])).values());
     uniqueActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return uniqueActivities;
@@ -349,7 +336,7 @@ export const joinActivity = async (activityId: string, user: { uid: string; name
   try {
     await updateDoc(activityDocRef, {
       participants: arrayUnion(participantData),
-      participantUids: arrayUnion(user.uid) // Also update participantUids
+      participantUids: arrayUnion(user.uid)
     });
   } catch (error) {
     console.error(`Error joining activity ${activityId}:`, error);
@@ -371,7 +358,7 @@ export const leaveActivity = async (activityId: string, user: { uid: string; nam
   try {
     await updateDoc(activityDocRef, {
       participants: arrayRemove(participantData),
-      participantUids: arrayRemove(user.uid) // Also update participantUids
+      participantUids: arrayRemove(user.uid)
     });
   } catch (error) {
     console.error(`Error leaving activity ${activityId}:`, error);
@@ -386,7 +373,7 @@ export const generateInviteCode = async (inviterId: string, inviterName: string 
         console.error("Firestore (db) is not initialized. Cannot generate invite code.");
         throw new Error("Database service unavailable for generateInviteCode.");
     }
-    const code = uuidv4().substring(0, 8); // Ensure uuid is installed and imported
+    const code = uuidv4().substring(0, 8);
     const inviteDocRef = doc(db, "invitations", code);
 
     const newInvitationForDb: Invitation = {
@@ -442,17 +429,22 @@ export const deleteInvitation = async (code: string): Promise<void> => {
 
 
 export const addFriend = async (userId: string, friendId: string): Promise<void> => {
+    console.log(`[addFriend] Attempting to add friend. Current User (userId): ${userId}, Prospective Friend (friendId): ${friendId}`);
+
     if (!db) {
-        console.error("Firestore (db) is not initialized. Cannot add friend.");
+        console.error("[addFriend] Firestore (db) is not initialized.");
         throw new Error("Database service unavailable for addFriend.");
     }
+    if (!userId || !friendId) {
+        console.error(`[addFriend] Invalid parameters. userId: ${userId}, friendId: ${friendId}`);
+        throw new Error("User ID and Friend ID must be provided.");
+    }
     if (userId === friendId) {
-        console.warn("User tried to add themselves as a friend.");
+        console.warn("[addFriend] User tried to add themselves as a friend.");
         const selfAddError = new Error("You cannot add yourself as a friend.");
         (selfAddError as any).code = 'cannot-add-self';
         throw selfAddError;
     }
-
 
     const userFriendRef = doc(db, `users/${userId}/friends/${friendId}`);
     const friendUserRef = doc(db, `users/${friendId}/friends/${userId}`);
@@ -461,62 +453,96 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
     let operationsCount = 0;
 
     try {
-        const [userProfileData, friendProfileData, userFriendSnap, friendUserSnap] = await Promise.all([
-            getUserProfile(userId),
-            getUserProfile(friendId),
-            getDoc(userFriendRef),
-            getDoc(friendUserRef)
-        ]);
+        console.log(`[addFriend] Fetching profile for current user: ${userId}`);
+        const userProfileData = await getUserProfile(userId); // This calls the logged getUserProfile
+        if (!userProfileData) {
+            console.error(`[addFriend] Current user profile not found for UID: ${userId}.`);
+            throw new Error(`Current user profile (UID: ${userId}) not found.`);
+        }
+        console.log(`[addFriend] Successfully fetched profile for current user: ${userId}`, { uid: userProfileData.uid, displayName: userProfileData.displayName });
 
-        if (!userProfileData) throw new Error(`Current user profile not found for UID: ${userId}.`);
-        if (!friendProfileData) throw new Error(`Friend profile not found for UID: ${friendId}.`);
+        console.log(`[addFriend] Fetching profile for prospective friend: ${friendId}`);
+        const friendProfileData = await getUserProfile(friendId); // This calls the logged getUserProfile
+        if (!friendProfileData) {
+            console.error(`[addFriend] Friend profile not found for UID: ${friendId}.`);
+            throw new Error(`Friend profile (UID: ${friendId}) not found.`);
+        }
+        console.log(`[addFriend] Successfully fetched profile for prospective friend: ${friendId}`, { uid: friendProfileData.uid, displayName: friendProfileData.displayName });
 
-        if (userFriendSnap.exists() && friendUserSnap.exists()) {
-            console.log(`Users ${userId} and ${friendId} are already friends.`);
-            const err = new Error("Users are already friends.");
-            (err as any).code = 'already-friends'; // Custom code for handling in UI
+        console.log(`[addFriend] Checking existing friendship status for ${userId} towards ${friendId}`);
+        const userFriendSnap = await getDoc(userFriendRef);
+        
+        if (userFriendSnap.exists()) {
+            console.log(`[addFriend] User ${userId} already has ${friendId} as a friend (path: users/${userId}/friends/${friendId} exists).`);
+             // To prevent partial states, also check if the other side exists.
+             // If not, this might be a good place to complete the friendship if one side exists.
+             // However, the primary error is often the write itself.
+             // For now, if user's side exists, assume "already-friends".
+            const err = new Error("You are already connected with this user.");
+            (err as any).code = 'already-friends';
             throw err;
         }
 
-        if (!userFriendSnap.exists()) {
-            const friendData: Friend = {
-                uid: friendProfileData.uid,
-                displayName: friendProfileData.displayName ?? null,
-                photoURL: friendProfileData.photoURL ?? null,
-            };
-            batch.set(userFriendRef, friendData);
-            operationsCount++;
-        }
+        // Operation 1: Current user (userId) adds inviter (friendId) to their own friends list
+        console.log(`[addFriend] Preparing to set users/${userId}/friends/${friendId}`);
+        const friendDataForUser: Friend = {
+            uid: friendProfileData.uid,
+            displayName: friendProfileData.displayName ?? null,
+            photoURL: friendProfileData.photoURL ?? null,
+        };
+        console.log(`[addFriend] Data for users/${userId}/friends/${friendId}:`, friendDataForUser);
+        batch.set(userFriendRef, friendDataForUser);
+        operationsCount++;
 
-        if (!friendUserSnap.exists()) {
-            const currentUserAsFriendData: Friend = {
-                uid: userProfileData.uid,
-                displayName: userProfileData.displayName ?? null,
-                photoURL: userProfileData.photoURL ?? null,
-            };
-            batch.set(friendUserRef, currentUserAsFriendData);
-            operationsCount++;
-        }
+        // Operation 2: Current user (userId) attempts to add themselves to inviter's (friendId) friends list
+        // This operation requires friendId to be the authenticated user or rules allowing this.
+        console.log(`[addFriend] Preparing to set users/${friendId}/friends/${userId}`);
+        const currentUserAsFriendData: Friend = {
+            uid: userProfileData.uid,
+            displayName: userProfileData.displayName ?? null,
+            photoURL: userProfileData.photoURL ?? null,
+        };
+        console.log(`[addFriend] Data for users/${friendId}/friends/${userId}:`, currentUserAsFriendData);
+        batch.set(friendUserRef, currentUserAsFriendData);
+        operationsCount++;
         
         if (operationsCount > 0) {
+            console.log(`[addFriend] Committing batch with ${operationsCount} operations for ${userId} and ${friendId}.`);
             await batch.commit();
-        } else if (!userFriendSnap.exists() || !friendUserSnap.exists()) {
-            // This case indicates a partial friendship, which shouldn't happen with batched writes.
-            // If somehow one side exists but not the other, this commit would fix it.
-            // However, the initial check for full friendship should cover this.
-            // For safety, if only one side was missing and now fixed, this is fine.
-            // If somehow code reaches here with opsCount = 0 but not fully friends, log it.
-            console.warn(`addFriend: No operations performed for ${userId} and ${friendId}, but they were not fully friends. UserSnap: ${userFriendSnap.exists()}, FriendSnap: ${friendUserSnap.exists()}`);
+            console.log(`[addFriend] Batch commit successful for ${userId} and ${friendId}. Friendship established.`);
+        } else {
+            // This case should ideally not be reached if not already friends.
+            console.warn(`[addFriend] No operations to commit for ${userId} and ${friendId}. This might indicate they were already friends or an issue in logic.`);
         }
 
     } catch (error: any) {
-        console.error(`Error adding friend connection between ${userId} and ${friendId}:`, error);
-        if (error.code === 'already-friends' || error.code === 'cannot-add-self') {
-            throw error; // Re-throw specific custom errors
+        console.error(`[addFriend] Error in addFriend operation between ${userId} and ${friendId}:`, error);
+        // console.error(`[addFriend] Error name: ${error.name}, message: ${error.message}, code: ${error.code}, stack: ${error.stack ? error.stack.substring(0, 500) + '...' : 'No stack'}`);
+        
+        // More detailed logging for Firebase specific errors
+        if (error.name === 'FirebaseError') {
+             console.error(`[addFriend] FirebaseError details: code=${error.code}, message=${error.message}`);
         }
-        throw new Error(`Failed to add friend: ${error.message || String(error)}`);
+
+
+        if (error.code === 'already-friends' || error.code === 'cannot-add-self') {
+            throw error; 
+        }
+        if (error.message.includes("profile not found")) { // Specific errors from our checks
+            throw error;
+        }
+        
+        // Default error for other cases, including actual permission issues from batch.commit()
+        // Firestore permission errors from batch.commit() will typically have name: 'FirebaseError' and code: 'permission-denied'
+        const defaultErrorMessage = `Failed to establish friend connection. Original error: ${error.message || String(error)}`;
+        if (error.name === 'FirebaseError' && (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission')))) {
+             console.error(`[addFriend] Firestore permission error during batch commit. This likely means one of the batched writes was denied by security rules (e.g., writing to users/${friendId}/friends/${userId} by user ${userId}).`);
+             throw new Error(`Friendship could not be fully established due to a permission issue. One part of the connection might have failed. Check Firestore rules. Original error: ${error.message}`);
+        }
+        throw new Error(defaultErrorMessage);
     }
 };
+
 
 export const removeFriend = async (userId: string, friendId: string): Promise<void> => {
     if (!db) {
@@ -542,7 +568,6 @@ export const getFriends = async (userId: string): Promise<Friend[]> => {
        throw new Error("Database service unavailable for getFriends.");
    }
   const friendsRef = collection(db, `users/${userId}/friends`);
-  // Order by displayName, Firestore handles nulls by placing them at the beginning or end based on index config
   const q = query(friendsRef, orderBy("displayName", "asc"));
   try {
     const querySnapshot = await getDocs(q);
@@ -552,11 +577,10 @@ export const getFriends = async (userId: string): Promise<Friend[]> => {
             uid: data.uid,
             displayName: data.displayName ?? null,
             photoURL: data.photoURL ?? null,
-        } as Friend; // Ensure Friend type contract
+        } as Friend;
     });
   } catch (error) {
       console.error(`Firebase error fetching friends for ${userId}:`, error);
       throw new Error(`Failed to fetch friends: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
-

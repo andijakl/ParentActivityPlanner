@@ -8,90 +8,113 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AuthProviderComponent({ children }: { children: React.ReactNode }) {
-  const { user, loading, firebaseConfigError, firebaseAuthError } = useAuth();
+  // firebaseConfigError is from AuthContext, sourced from firebase/config.ts
+  const { user, loading, firebaseConfigError, firebaseAuthError, isFirebaseSetupAttempted } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   const isAuthRoute = pathname.startsWith('/signin') || pathname.startsWith('/signup');
   const isInviteRoute = pathname.startsWith('/invite');
-  // The root page "/" should also be considered public or a landing page before auth check.
   const isPublicRoute = isAuthRoute || isInviteRoute || pathname === '/';
 
-
   useEffect(() => {
+    // If Firebase configuration itself failed, primary concern is to inform user, not redirect.
     if (firebaseConfigError) {
-        console.error("AuthProviderComponent: Firebase Configuration Error. Halting auth checks.", firebaseConfigError);
-        // The component will render the loading/error skeleton because `loading` might still be true
-        // or the firebaseConfigError flag will be caught by the render logic.
-        return;
+      console.error("AuthProviderComponent: Firebase Configuration Error detected. Auth checks and redirects halted.", firebaseConfigError);
+      return; // Prevent further auth logic if core config is broken.
     }
     
-    // firebaseAuthError is not directly used for redirection logic here,
-    // but rather for potential UI cues or global error handling.
-    // The loading state and user presence are key for redirects.
-
-    if (!loading) { // Only act once auth state is resolved
-      if (user) { // User is logged in
-        if (isAuthRoute) { // Trying to access /signin or /signup
+    // Proceed with auth logic only if Firebase config is okay and auth state is resolved
+    if (!loading && !firebaseConfigError) {
+      if (user) {
+        if (isAuthRoute) {
           router.replace('/dashboard');
         }
-        // If user is logged in and NOT on an auth route (e.g., on /dashboard, /friends, /profile),
-        // they are allowed to be there. No redirection needed from this effect.
-      } else { // User is NOT logged in
-        if (!isPublicRoute) { // Trying to access a protected route
+      } else {
+        if (!isPublicRoute) {
           router.replace('/signin');
         }
-        // If user is not logged in and on a public route, they are allowed. No redirection needed.
       }
     }
   }, [user, loading, router, pathname, isAuthRoute, isPublicRoute, firebaseConfigError]);
 
+  // Priority 1: Display critical Firebase configuration error
+  if (firebaseConfigError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background text-foreground">
+        <div className="w-full max-w-lg p-6 md:p-8 border rounded-lg shadow-xl bg-card border-destructive">
+          <h1 className="text-xl md:text-2xl font-bold text-destructive mb-4 text-center">Application Configuration Error</h1>
+          <p className="text-card-foreground mb-3 text-center">
+            Parent Activity Hub cannot start due to a Firebase configuration problem.
+          </p>
+          <div className="bg-destructive/10 p-3 rounded-md mb-4">
+            <p className="text-sm text-destructive font-medium">
+              <strong>Error Details:</strong> {firebaseConfigError.message}
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Please ensure your Firebase environment variables (e.g., <code>NEXT_PUBLIC_FIREBASE_API_KEY</code>) are correctly set in your <code>.env.local</code> file and that the Firebase project is properly set up in the Firebase console (including authorized domains for authentication if applicable).
+          </p>
+           <div className="mt-6 text-center">
+            <Button onClick={() => window.location.reload()} variant="destructive">
+              Try Reloading Page
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  if (loading || firebaseConfigError) {
+  // Priority 2: Show loading skeleton while auth state is being determined
+  // (and Firebase config is OK and setup has been attempted)
+  if (loading && isFirebaseSetupAttempted) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Skeleton className="h-12 w-12 rounded-full" />
         <Skeleton className="h-4 w-[250px] ml-4" />
-        {firebaseConfigError && (
-            <p className="text-destructive text-center mt-4 p-4 break-words max-w-md">
-                <strong>Application Error:</strong> Firebase is not configured correctly.
-                <br />
-                Details: {firebaseConfigError.message}
-            </p>
-        )}
       </div>
     );
   }
-  
-  // If there's an auth error after loading, and it's not a config error (handled above)
-  // Display a message if on a protected route. Public routes might still function or show specific errors.
-   if (firebaseAuthError && !loading && !isPublicRoute) {
-     console.warn("AuthProviderComponent: Rendering children despite Firebase Auth error after initial load on a protected route.", firebaseAuthError);
-     // Consider showing a more specific error UI here if children don't handle it
-     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
-            <p className="text-destructive text-center">
-                <strong>Authentication Error:</strong> There was an issue with authentication.
-                <br />
-                Details: {firebaseAuthError.message}
-                <br />
-                Please try signing in again or contact support.
-            </p>
-            <Button onClick={() => router.push('/signin')} className="mt-4">Go to Sign In</Button>
-        </div>
-     );
-   }
 
-  // Render children if:
-  // 1. Not loading AND (user exists OR current route is public)
-  // This covers authenticated users on any page, and unauthenticated users on public pages.
-  if (!loading && (user || isPublicRoute)) {
+  // Priority 3: Handle Firebase authentication errors (e.g., network issues with auth service)
+  // on protected routes, after initial loading and config check.
+  if (firebaseAuthError && !loading && !isPublicRoute) {
+    console.warn("AuthProviderComponent: Firebase Auth error on a protected route after load.", firebaseAuthError);
+    return (
+       <div className="flex flex-col items-center justify-center min-h-screen p-4">
+           <div className="w-full max-w-md p-6 border rounded-lg shadow-lg bg-card border-destructive">
+             <h1 className="text-xl font-bold text-destructive mb-4 text-center">Authentication Error</h1>
+             <p className="text-destructive-foreground mb-2 text-center">
+                 There was an issue with the authentication service.
+             </p>
+             <div className="bg-destructive/10 p-3 rounded-md mb-4">
+                <p className="text-sm text-destructive font-medium">
+                    <strong>Details:</strong> {firebaseAuthError.message}
+                </p>
+             </div>
+             <div className="mt-6 text-center">
+                <Button onClick={() => router.push('/signin')} variant="secondary">
+                    Go to Sign In
+                </Button>
+             </div>
+           </div>
+       </div>
+    );
+  }
+
+  // Default: Render children if everything is okay or if it's a public route
+  // This covers:
+  // - Authenticated user on any page
+  // - Unauthenticated user on a public route
+  // - Cases where loading is finished, no errors, and user status dictates access (handled by useEffect redirects)
+  // - Initial render pass if Firebase setup hasn't been marked as attempted yet
+  if ((!loading && (user || isPublicRoute)) || !isFirebaseSetupAttempted) {
     return <>{children}</>;
   }
   
-  // Fallback: This case should ideally be rare if redirects work as expected.
-  // It implies !loading, !user, and !isPublicRoute.
-  // useEffect should have redirected to /signin. This skeleton is a temporary visual during that redirect.
+  // Fallback loading state (e.g., if redirects are in progress but not yet completed by useEffect,
+  // or if it's the very first render before isFirebaseSetupAttempted is true and loading is still true)
+  // This implies !loading (if reached past the above if) or initial state.
   return (
     <div className="flex items-center justify-center min-h-screen">
       <Skeleton className="h-12 w-12 rounded-full" />

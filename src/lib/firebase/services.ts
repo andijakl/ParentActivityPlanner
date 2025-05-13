@@ -26,7 +26,7 @@ import type {
   Activity, ActivityClient,
   Friend,
   Invitation, InvitationClient,
-  CreateActivityData, UpdateActivityData, // Import DTO types
+  CreateActivityData, UpdateActivityData,
 } from "@/lib/types";
 import { v4 as uuidv4 } from 'uuid'; // For generating unique invite codes
 
@@ -97,9 +97,10 @@ export const createUserProfile = async (userData: Omit<UserProfile, 'createdAt'>
          throw new Error("Database service unavailable.");
      }
     const userDocRef = doc(db, "users", userData.uid);
-    const profileForDb: UserProfile = {
+    // UserProfile defines createdAt as Timestamp. setDoc is typed to accept FieldValue for such fields.
+    const profileForDb = {
         ...userData,
-        createdAt: serverTimestamp() as Timestamp, // Firestore will convert this
+        createdAt: serverTimestamp(), 
     };
     await setDoc(userDocRef, profileForDb);
 };
@@ -123,10 +124,11 @@ export const createActivity = async (activityData: CreateActivityData): Promise<
        throw new Error("Database service unavailable.");
    }
   const newActivityRef = doc(collection(db, "activities"));
-  const newActivityForDb: Activity = {
+  // Activity defines createdAt as Timestamp. setDoc handles FieldValue.
+  const newActivityForDb = {
     ...activityData,
     id: newActivityRef.id,
-    createdAt: serverTimestamp() as Timestamp,
+    createdAt: serverTimestamp(),
   };
   await setDoc(newActivityRef, newActivityForDb);
   return newActivityRef.id;
@@ -180,7 +182,9 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
      const activitiesRef = collection(db, "activities");
      const now = Timestamp.now();
 
-     const chunks = [];
+     // Firestore 'in' queries are limited to 30 elements in the array.
+     // Chunk the userAndFriendIds array if it's larger.
+     const chunks: string[][] = [];
      for (let i = 0; i < userAndFriendIds.length; i += 30) {
          chunks.push(userAndFriendIds.slice(i, i + 30));
      }
@@ -189,7 +193,7 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
          const q = query(
              activitiesRef,
              where("creatorId", "in", chunk),
-             where("date", ">=", now),
+             where("date", ">=", now), // Only get future or current activities
              orderBy("date", "asc")
          );
          return getDocs(q);
@@ -203,6 +207,7 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
             })
      );
 
+     // Sort all activities from all chunks by date
      activities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
      return activities;
@@ -237,14 +242,16 @@ export const generateInviteCode = async (inviterId: string, inviterName: string 
         console.error("Firestore (db) is not initialized. Cannot generate invite code.");
         throw new Error("Database service unavailable.");
     }
-    const code = uuidv4().substring(0, 8);
+    const code = uuidv4().substring(0, 8); // Generate a shorter, unique code
     const inviteDocRef = doc(db, "invitations", code);
 
-    const newInvitationForDb: Invitation = {
+    // Invitation defines createdAt as Timestamp. setDoc handles FieldValue.
+    const newInvitationForDb = {
         code: code,
         inviterId: inviterId,
         inviterName: inviterName,
-        createdAt: serverTimestamp() as Timestamp,
+        createdAt: serverTimestamp(),
+        // expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) // Example: 7 days expiry
     };
 
     await setDoc(inviteDocRef, newInvitationForDb);
@@ -282,22 +289,36 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
         console.error("Firestore (db) is not initialized. Cannot add friend.");
         throw new Error("Database service unavailable.");
     }
+
+    // Check if they are already friends to prevent duplicate operations or errors
+    const userFriendRef = doc(db, `users/${userId}/friends/${friendId}`);
+    const userFriendSnap = await getDoc(userFriendRef);
+    if (userFriendSnap.exists()) {
+        console.log(`Users ${userId} and ${friendId} are already friends.`);
+        // Optionally throw an error or return a specific status
+        // For now, we'll just prevent re-adding.
+        // throw new Error("Users are already friends.");
+        return;
+    }
+
+    const batch = writeBatch(db);
+
+    // Fetch profiles to get friend data
     const friendProfile = await getUserProfile(friendId);
     if (!friendProfile) {
         throw new Error("Friend profile not found.");
     }
-
     const friendData: Friend = {
         uid: friendProfile.uid,
         displayName: friendProfile.displayName,
         photoURL: friendProfile.photoURL,
     };
+    batch.set(userFriendRef, friendData);
 
-    const userFriendDocRef = doc(db, `users/${userId}/friends/${friendId}`);
-    await setDoc(userFriendDocRef, friendData);
 
     const currentUserProfile = await getUserProfile(userId);
     if (!currentUserProfile) {
+        // This should ideally not happen if the current user is authenticated and has a profile
         console.error("Current user profile not found while adding friend to their list.");
         throw new Error("Current user profile not found.");
     }
@@ -306,8 +327,10 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
         displayName: currentUserProfile.displayName,
         photoURL: currentUserProfile.photoURL,
     };
-    const friendUserDocRef = doc(db, `users/${friendId}/friends/${userId}`);
-    await setDoc(friendUserDocRef, currentUserAsFriendData);
+    const friendUserRef = doc(db, `users/${friendId}/friends/${userId}`);
+    batch.set(friendUserRef, currentUserAsFriendData);
+
+    await batch.commit();
 };
 
 export const removeFriend = async (userId: string, friendId: string): Promise<void> => {
@@ -329,8 +352,7 @@ export const getFriends = async (userId: string): Promise<Friend[]> => {
        return [];
    }
   const friendsRef = collection(db, `users/${userId}/friends`);
-  const q = query(friendsRef);
+  const q = query(friendsRef, orderBy("displayName", "asc")); // Optionally order friends
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => doc.data() as Friend);
 };
-

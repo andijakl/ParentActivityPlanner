@@ -205,6 +205,28 @@ This project uses Next.js App Router configured for **static export** (`output: 
 
 You can also deploy the contents of the `out/` directory to other static hosting providers like Vercel (select "Other" framework type), Netlify, GitHub Pages, etc. Ensure they are configured to handle Single Page Applications (SPAs) correctly, usually by setting up a rewrite rule similar to the Firebase one (redirecting all paths to `index.html`).
 
+
+### For a complete re-build, use:
+
+```
+# 1. Clean Next.js build cache
+rm -rf .next out
+
+# 2. Clean package manager cache (choose the command for your package manager)
+npm cache clean --force
+
+# 3. Reinstall dependencies (choose the commands for your package manager)
+rm -rf node_modules
+rm package-lock.json 
+npm install
+
+# 4. Rebuild the Next.js application
+npm run build 
+
+# 5. and 6. Clean Firebase Hosting cache and deploy both hosting and functions
+firebase deploy --only hosting
+```
+
 ### Continuous Deployment (CI/CD) - Example with GitHub Actions for Firebase Hosting
 
 1.  **Push your code** to a GitHub repository.
@@ -265,4 +287,3 @@ You can also deploy the contents of the `out/` directory to other static hosting
         *   `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`: Your Firebase Measurement ID (optional).
 4.  **Push the workflow file.** Deployments will now trigger automatically on pushes to the specified branch (`main` in the example).
 ```
-

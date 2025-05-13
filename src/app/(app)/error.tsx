@@ -72,6 +72,13 @@ const AppError: FC<AppErrorProps> = ({ error, reset }) => {
   useEffect(() => {
     // Log the error to an error reporting service
     console.error("App-level error boundary caught an error (from src/app/(app)/error.tsx):", error);
+
+    // Check if the error is a ChunkLoadError
+    if (error.message && error.message.includes('Loading chunk')) {
+      console.log('ChunkLoadError detected, attempting to reload page...');
+      // Force a hard reload to get the latest version of the app
+      window.location.reload();
+    }
   }, [error]);
 
   return (

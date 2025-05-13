@@ -1,48 +1,50 @@
-
 "use client";
 
 import React, { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter, usePathname } from 'next/navigation';
 
-const AUTH_ROUTES = ['/signin', '/signup', '/invite']; // Public routes
-const DEFAULT_REDIRECT_AUTH = '/dashboard'; // Redirect if logged in and on auth page
-const DEFAULT_REDIRECT_NO_AUTH = '/signin'; // Redirect if not logged in and on protected page
+const AUTH_ROUTES = ['/signin', '/signup', '/invite']; // Public-like routes that logged-in users should be redirected away from
+const DEFAULT_REDIRECT_AUTH = '/dashboard'; // Where logged-in users are sent if they hit an AUTH_ROUTE
+const DEFAULT_REDIRECT_NO_AUTH = '/signin'; // Where non-logged-in users are sent if they hit a protected route
 
 export default function AuthProviderComponent({ children }: { children: React.ReactNode }) {
-  const { user, loading, isFirebaseSetupAttempted, firebaseConfigError } = useAuth();
+  const { user, loading, isFirebaseEffectivelyInitialized, firebaseConfigError } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
-  const isFirebaseEffectivelyInitialized = isFirebaseSetupAttempted && !firebaseConfigError;
+  const isFirebaseReady = isFirebaseEffectivelyInitialized && !firebaseConfigError;
 
   useEffect(() => {
-    if (!isFirebaseEffectivelyInitialized || loading) {
-      return; // Wait for Firebase and auth state to be ready
+    if (!isFirebaseReady || loading) {
+      // Wait for Firebase initialization and auth state to settle.
+      return;
     }
 
-    const isAuthRoute = AUTH_ROUTES.some(route => pathname.startsWith(route));
+    const currentPathIsAuthRoute = AUTH_ROUTES.some(route => pathname.startsWith(route));
 
     if (user) {
-      // User is logged in
-      if (isAuthRoute) {
-        router.replace(DEFAULT_REDIRECT_AUTH); // Redirect from auth pages to dashboard
+      // User is logged in.
+      if (currentPathIsAuthRoute) {
+        // If logged in and on an auth page (e.g., /signin, /signup), redirect to dashboard.
+        router.replace(DEFAULT_REDIRECT_AUTH);
       }
-      // For other protected routes, user is allowed, no action needed.
+      // If logged in and on a protected page (e.g., /friends, /dashboard), no redirect is needed from here.
+      // The user is allowed to be on this page.
     } else {
-      // User is not logged in
-      if (!isAuthRoute && pathname !== '/') { // Also allow root path for initial redirect logic
-        router.replace(DEFAULT_REDIRECT_NO_AUTH); // Redirect from protected pages to signin
+      // User is not logged in.
+      if (!currentPathIsAuthRoute && pathname !== '/') {
+        // If not logged in, and not on an auth page, and not on the root page,
+        // it's a protected page, so redirect to sign-in.
+        router.replace(DEFAULT_REDIRECT_NO_AUTH);
       }
-      // For auth routes or root, user is allowed, no action needed here.
+      // If not logged in and on an auth page (e.g., /signin) or the root page,
+      // no redirect is needed from here. The user is allowed to be on this page.
     }
-  }, [user, loading, router, pathname, isFirebaseEffectivelyInitialized]);
+  }, [user, loading, router, pathname, isFirebaseReady, DEFAULT_REDIRECT_AUTH, DEFAULT_REDIRECT_NO_AUTH]); // Added constants to dependency array for completeness
 
-  // Show loading state or children
-  // This component primarily handles redirection, actual loading UI can be elsewhere or children can handle it.
-  // if (loading || !isFirebaseEffectivelyInitialized) {
-  // return <div>Loading authentication...</div>; // Or a more sophisticated loader
-  // }
-
+  // Render children; actual loading UI can be handled by consuming components or a global loader.
+  // This component primarily focuses on redirection logic.
   return <>{children}</>;
 }
+

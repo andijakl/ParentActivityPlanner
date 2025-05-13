@@ -32,22 +32,37 @@ import { v4 as uuidv4 } from 'uuid'; // For generating unique invite codes
 
 
 // --- Helper to transform Firestore doc to Client types ---
-const toUserProfileClient = (profile: UserProfile): UserProfileClient => ({
-    ...profile,
-    createdAt: (profile.createdAt as Timestamp).toDate().toISOString(),
-});
+const toUserProfileClient = (profile: UserProfile): UserProfileClient => {
+    // Ensure createdAt is a Firestore Timestamp before converting
+    const createdAtTimestamp = profile.createdAt instanceof Timestamp ? profile.createdAt : null;
+    return {
+        ...profile,
+        // Fallback to epoch if timestamp is not valid, to prevent crash
+        createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date(0).toISOString(),
+    };
+};
 
-const toActivityClient = (activity: Activity): ActivityClient => ({
-    ...activity,
-    date: (activity.date as Timestamp).toDate().toISOString(),
-    createdAt: (activity.createdAt as Timestamp).toDate().toISOString(),
-});
+const toActivityClient = (activity: Activity): ActivityClient => {
+    const dateTimestamp = activity.date instanceof Timestamp ? activity.date : null;
+    const createdAtTimestamp = activity.createdAt instanceof Timestamp ? activity.createdAt : null;
+    return {
+        ...activity,
+        // Fallback to epoch if timestamps are not valid
+        date: dateTimestamp ? dateTimestamp.toDate().toISOString() : new Date(0).toISOString(),
+        createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date(0).toISOString(),
+    };
+};
 
-const toInvitationClient = (invitation: Invitation): InvitationClient => ({
-    ...invitation,
-    createdAt: (invitation.createdAt as Timestamp).toDate().toISOString(),
-    expiresAt: invitation.expiresAt ? (invitation.expiresAt as Timestamp).toDate().toISOString() : undefined,
-});
+const toInvitationClient = (invitation: Invitation): InvitationClient => {
+    const createdAtTimestamp = invitation.createdAt instanceof Timestamp ? invitation.createdAt : null;
+    // expiresAt can be undefined or a Timestamp
+    const expiresAtTimestamp = invitation.expiresAt instanceof Timestamp ? invitation.expiresAt : null;
+    return {
+        ...invitation,
+        createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date(0).toISOString(),
+        expiresAt: expiresAtTimestamp ? expiresAtTimestamp.toDate().toISOString() : undefined,
+    };
+};
 
 
 // --- User Profile ---
@@ -98,7 +113,7 @@ export const createUserProfile = async (userData: Omit<UserProfile, 'createdAt'>
      }
     const userDocRef = doc(db, "users", userData.uid);
     // UserProfile defines createdAt as Timestamp. setDoc is typed to accept FieldValue for such fields.
-    const profileForDb = {
+    const profileForDb: UserProfile = { // Ensure it matches UserProfile type for Firestore
         ...userData,
         createdAt: serverTimestamp() as Timestamp, // Explicitly cast for assignment
     };
@@ -125,7 +140,7 @@ export const createActivity = async (activityData: CreateActivityData): Promise<
    }
   const newActivityRef = doc(collection(db, "activities"));
   // Activity defines createdAt as Timestamp. setDoc handles FieldValue.
-  const newActivityForDb: Activity = {
+  const newActivityForDb: Activity = { // Ensure it matches Activity type for Firestore
     ...activityData,
     id: newActivityRef.id,
     createdAt: serverTimestamp() as Timestamp, // Explicitly cast
@@ -175,97 +190,100 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
      }
     const friends = await getFriends(uid);
     const friendIds = friends.map(f => f.uid);
-    const userAndFriendIds = Array.from(new Set([uid, ...friendIds])); // Ensure unique IDs
+    const userAndFriendIds = Array.from(new Set([uid, ...friendIds])); 
 
     if (userAndFriendIds.length === 0) return [];
 
      const activitiesRef = collection(db, "activities");
      const now = Timestamp.now();
 
-     // Firestore 'in' queries are limited to 30 elements in the array.
-     // Chunk the userAndFriendIds array if it's larger.
      const chunks: string[][] = [];
-     const chunkSize = 30; // Max elements for 'in' query
+     const chunkSize = 30; 
      for (let i = 0; i < userAndFriendIds.length; i += chunkSize) {
          chunks.push(userAndFriendIds.slice(i, i + chunkSize));
      }
 
      const activityPromises = chunks.map(chunk => {
-         const q = query(
-             activitiesRef,
-             where("participants", "array-contains-any", chunk.map(id => ({ uid: id })) ), // This query might not work as intended for complex objects.
-                                                                                           // A better approach might be separate queries or a more complex data model if array-contains-any on objects is tricky.
-                                                                                           // For now, let's assume it's searching for activities where ANY of the chunk UIDs is a participant.
-                                                                                           // Or, a simpler creatorId based query as before:
-             // where("creatorId", "in", chunk), // Querying by creatorId
-             where("date", ">=", now), 
-             orderBy("date", "asc")
-         );
-         // Alternative: Query for activities created by user OR friends, AND activities user is a participant in.
-         // This might require two separate queries and then merging+deduplicating.
-         // For simplicity, the original `where("creatorId", "in", chunk)` or `where("participants", "array-contains", {uid: someId})` per ID might be more direct.
-         // Let's revert to a simpler query structure if the above array-contains-any on objects is problematic or inefficient.
-         // Using OR queries (||) is limited in Firestore. Usually done by multiple queries and client-side merge.
-
-         // Querying for activities where the current user or their friends are participants
-         // This requires an index on the `participants` array if not already present.
-         // A simple `array-contains` query for each user ID would be too many queries.
-         // A `array-contains-any` for UIDs within the participants array.
-         // However, `array-contains-any` cannot be used with `orderBy` on a different field or `where` on `date` in the same query directly.
-         // The most straightforward way is to query activities created by the user/friends and separately query activities they participate in, then merge.
-         // Or, fetch all future activities and filter client-side (not scalable).
-
-         // Let's stick to the original logic: activities created by user or friends.
           const qCreator = query(
             activitiesRef,
             where("creatorId", "in", chunk),
             where("date", ">=", now),
             orderBy("date", "asc")
         );
-        // And activities where the user is a participant (if not already covered by creator query)
-        const qParticipant = query(
-            activitiesRef,
-            where("participants", "array-contains", { uid: uid, name: null, photoURL: null }), //  Need to query with a full participant object, or restructure.
-                                                                                              // This is tricky because name/photoURL can vary.
-                                                                                              // Better to iterate through friends for participant check.
-            where("date", ">=", now),
-            orderBy("date", "asc")
-        );
-        // This participant query is not ideal. For now, we will primarily rely on created activities.
-        // And activities the current user directly joined (which also makes them a participant).
-        // The `getDashboardActivities` should show activities created by user OR their friends,
-        // AND activities the user is a participant in, regardless of creator.
-
         return getDocs(qCreator);
+     });
+     
+     // Fetch activities where current user is a participant (and not necessarily the creator)
+     // This needs a robust way to query participants. Using a 'participantUids' array field would be best.
+     // For now, a simplified query or client-side filtering after fetching creator-based activities might be needed.
+     // The current participant query is complex and error-prone due to matching object structures.
+     // We'll focus on creator-based activities and those the user explicitly joined (handled by `arrayUnion` on participant list).
+     // To get activities a user is *any* participant in (not just creator), would typically require
+     // a query like `where("participantUids", "array-contains", uid)`. This requires schema change.
+     // Given current structure, we can fetch activities created by user/friends, and client can filter if needed.
+     // Or, augment dashboard to also fetch activities where user is *specifically* in `participants` array.
+     // This part is simplified here to avoid query complexity without schema change.
+
+     const participantActivityPromises = chunks.map(chunk => {
+        // This query attempts to find activities where any of the UIDs in the chunk are participants.
+        // Note: Firestore's "array-contains-any" works on simple array elements, not complex objects within an array directly in this manner.
+        // A better approach for querying participants would be a `participantUids: string[]` field.
+        // For this example, we'll assume a simplified scenario or that participants are primarily creators or explicitly joined.
+        // This query below is unlikely to work as intended for matching participant objects.
+        // const qParticipant = query(
+        //   activitiesRef,
+        //   where("participants", "array-contains-any", chunk.map(id => ({ uid: id }))), // THIS IS PROBLEMATIC for objects
+        //   where("date", ">=", now),
+        //   orderBy("date", "asc")
+        // );
+        // return getDocs(qParticipant);
+
+        // A more direct (but potentially numerous) way if not chunking or using a different data model:
+        if (chunk.includes(uid)) { // Only run this specific query for the chunk containing the current user
+             const qUserIsParticipant = query(
+                 activitiesRef,
+                 // This relies on the exact structure of the participant object, which can be fragile.
+                 // It's better if 'participants' was an array of UIDs or if we had a 'participantUids' field.
+                 where("participants", "array-contains", {
+                     uid: uid,
+                     // Name and photoURL might change or not be perfectly synced, making this unreliable.
+                     // The robust solution is a `participantUids` array.
+                     // For now, this will only match if the stored participant object for UID has matching name/photo (or null if that's what's stored).
+                     // This is a known limitation of the current query structure.
+                     name: (await getUserProfile(uid))?.displayName ?? null, // Fetch current name
+                     photoURL: (await getUserProfile(uid))?.photoURL ?? null // Fetch current photoURL
+                 }),
+                 where("date", ">=", now),
+                 orderBy("date", "asc")
+             );
+             return getDocs(qUserIsParticipant);
+        }
+        return Promise.resolve(null); // Return null promise for chunks not containing the user to avoid unnecessary complex queries for friends' participation
      });
 
 
      const querySnapshots = await Promise.all(activityPromises);
+     const participantQuerySnapshots = (await Promise.all(participantActivityPromises)).filter(s => s !== null) as FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>[];
+
+
      let activities = querySnapshots.flatMap(snapshot =>
          snapshot.docs.map(doc => {
              const data = doc.data() as Activity;
              return toActivityClient(data); 
             })
      );
-     
-     // Additionally, fetch activities where the current user is a participant but not the creator
-     if (uid) {
-        const participantActivitiesQuery = query(
-            collection(db, "activities"),
-            where("participants", "array-contains", { uid: uid, name: (await getUserProfile(uid))?.displayName ?? null, photoURL: (await getUserProfile(uid))?.photoURL ?? null }), // This is still not ideal due to name/photoURL possibly changing. Storing only UID in a simple array `participantUids` would be better for querying.
-            where("date", ">=", now),
-            orderBy("date", "asc")
-        );
-        // For a robust participant query, it's better to have a `participantUids: string[]` field.
-        // Given the current structure, this query is prone to issues if name/photoURL in participant object doesn't exactly match.
-        // A simplified approach: get all activities for user/friends and filter if user is participant.
-     }
 
-
-     // Deduplicate activities based on ID
-     const uniqueActivities = Array.from(new Map(activities.map(act => [act.id, act])).values());
+     const participantActivities = participantQuerySnapshots.flatMap(snapshot =>
+        snapshot.docs.map(doc => {
+            const data = doc.data() as Activity;
+            return toActivityClient(data);
+        })
+     );
      
-     // Sort all unique activities by date
+     // Combine and deduplicate activities based on ID
+     const combinedActivities = [...activities, ...participantActivities];
+     const uniqueActivities = Array.from(new Map(combinedActivities.map(act => [act.id, act])).values());
+     
      uniqueActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
      return uniqueActivities;
@@ -300,16 +318,15 @@ export const generateInviteCode = async (inviterId: string, inviterName: string 
         console.error("Firestore (db) is not initialized. Cannot generate invite code.");
         throw new Error("Database service unavailable.");
     }
-    const code = uuidv4().substring(0, 8); // Generate a shorter, unique code
+    const code = uuidv4().substring(0, 8); 
     const inviteDocRef = doc(db, "invitations", code);
 
-    // Invitation defines createdAt as Timestamp. setDoc handles FieldValue.
-    const newInvitationForDb: Invitation = {
+    const newInvitationForDb: Invitation = { // Ensure matches Invitation type
         code: code,
         inviterId: inviterId,
         inviterName: inviterName,
-        createdAt: serverTimestamp() as Timestamp, // Explicitly cast
-        expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) // Example: 7 days expiry
+        createdAt: serverTimestamp() as Timestamp,
+        expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) 
     };
 
     await setDoc(inviteDocRef, newInvitationForDb);
@@ -348,7 +365,6 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
         throw new Error("Database service unavailable.");
     }
 
-    // Check if they are already friends to prevent duplicate operations or errors
     const userFriendRef = doc(db, `users/${userId}/friends/${friendId}`);
     const userFriendSnap = await getDoc(userFriendRef);
     
@@ -358,16 +374,12 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
     if (userFriendSnap.exists() && friendUserSnap.exists()) {
         console.log(`Users ${userId} and ${friendId} are already bidirectionally friends.`);
         const err = new Error("Users are already friends.");
-        (err as any).code = 'already-friends'; // Add a code for easier checking
+        (err as any).code = 'already-friends';
         throw err;
     }
     
-    // If one side exists but not the other, it's a partial connection, proceed to complete it.
-    console.log(`Proceeding to establish/complete friendship between ${userId} and ${friendId}.`);
-
     const batch = writeBatch(db);
 
-    // Fetch profiles to get friend data
     const friendProfile = await getUserProfile(friendId);
     if (!friendProfile) {
         throw new Error(`Friend profile not found for UID: ${friendId}.`);
@@ -377,7 +389,6 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
         displayName: friendProfile.displayName,
         photoURL: friendProfile.photoURL,
     };
-    // User (userId) adds Friend (friendId) to their list
     if (!userFriendSnap.exists()) {
         batch.set(userFriendRef, friendData);
     }
@@ -392,20 +403,12 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
         displayName: currentUserProfile.displayName,
         photoURL: currentUserProfile.photoURL,
     };
-    // Friend (friendId) adds User (userId) to their list
     if (!friendUserSnap.exists()) {
         batch.set(friendUserRef, currentUserAsFriendData);
     }
     
-    // Only commit if there are actual writes to perform
-    // The batch will be empty if both already existed from the earlier checks,
-    // but the initial check for bidirectionality should catch this.
-    // However, to be safe with partial connections:
     if (!userFriendSnap.exists() || !friendUserSnap.exists()) {
         await batch.commit();
-    } else {
-        // This case should be caught by the initial bidirectional check.
-        console.log("No writes needed as friendship seems to exist or was just checked as existing.");
     }
 };
 
@@ -428,8 +431,7 @@ export const getFriends = async (userId: string): Promise<Friend[]> => {
        return [];
    }
   const friendsRef = collection(db, `users/${userId}/friends`);
-  const q = query(friendsRef, orderBy("displayName", "asc")); // Optionally order friends
+  const q = query(friendsRef, orderBy("displayName", "asc")); 
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => doc.data() as Friend);
 };
-

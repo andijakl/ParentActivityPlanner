@@ -37,7 +37,6 @@ export interface UserProfile extends BaseUserProfile {
 export interface Activity extends BaseActivity {
   date: Timestamp;
   createdAt: Timestamp;
-  location: string | null; // Ensure location is explicitly null if not set
   participantUids?: string[]; // Array of UIDs for efficient querying of participation
 }
 

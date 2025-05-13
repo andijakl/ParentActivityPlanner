@@ -11,8 +11,8 @@ function SignUpPageContent() {
 export default function SignUpPage() {
   return (
      // AuthProviderComponent is now in (auth)/layout.tsx
-     <Suspense fallback={<div>Loading...</div>}>
-        <SignInPageContent />
+     <Suspense fallback={<div>Loading...</div>}> // Suspense is required because SignUpForm uses useSearchParams
+        <SignUpPageContent />
      </Suspense>
   );
 }

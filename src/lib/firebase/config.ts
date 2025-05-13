@@ -33,9 +33,10 @@ if (!getApps().length) {
       auth = getAuth(app);
       db = getFirestore(app);
     } catch (error) {
-      console.error("Firebase initialization failed:", error);
-      firebaseInitializationError = error instanceof Error ? error : new Error(String(error));
-      // Ensure auth and db are null if initialization fails
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // Log the original error for debugging but store a standard Error object.
+      console.error("Firebase initialization failed during initializeApp/getAuth/getFirestore:", errorMessage, error);
+      firebaseInitializationError = new Error(`Firebase Init Failed: ${errorMessage}`);
       auth = null;
       db = null;
     }
@@ -44,33 +45,28 @@ if (!getApps().length) {
       "Firebase configuration is missing essential values (apiKey, authDomain, projectId). " +
       "Please check your .env.local file and ensure NEXT_PUBLIC_FIREBASE_* variables are set correctly. " +
       "Firebase services will not be initialized.";
-    console.error(errorMessage);
+    console.error(errorMessage); // This console.error is fine, it's for developer info.
     firebaseInitializationError = new Error(errorMessage);
-    // app will be undefined here. To avoid errors with getAuth(app) or getFirestore(app) if app is undefined,
-    // we ensure auth and db are explicitly null.
     auth = null;
     db = null;
   }
 } else {
-  app = getApp(); // If already initialized, get the app
-  // And then try to get auth and db, respecting that config might still be bad
-  // This path is less likely if !getApps().length is the primary guard for init
+  app = getApp();
   if (isFirebaseConfigured()) {
      try {
         auth = getAuth(app);
         db = getFirestore(app);
      } catch (error) {
-        console.error("Firebase getAuth/getFirestore failed on existing app:", error);
-        firebaseInitializationError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Firebase getAuth/getFirestore failed on existing app:", errorMessage, error);
+        firebaseInitializationError = new Error(`Firebase Auth/Firestore Get Failed on Existing App: ${errorMessage}`);
         auth = null;
         db = null;
      }
   } else {
-    // This case implies apps were initialized elsewhere, but current config is bad.
-    // It's an unusual state.
     const errorMessage =
       "Firebase app exists, but current configuration is invalid. Services may not work as expected.";
-    console.warn(errorMessage); // Warn because app exists but config is bad.
+    console.warn(errorMessage); 
     firebaseInitializationError = new Error(errorMessage);
     auth = null;
     db = null;
@@ -78,3 +74,4 @@ if (!getApps().length) {
 }
 
 export { app, auth, db, firebaseInitializationError, isFirebaseConfigured };
+

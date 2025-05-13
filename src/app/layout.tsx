@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
@@ -17,6 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Parent Activity Hub',
   description: 'Coordinate activities with other parents and their children using Parent Activity Hub.',
+  icons: null, // Explicitly tell Next.js not to handle default icons from app directory
 };
 
 export default function RootLayout({

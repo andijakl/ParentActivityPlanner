@@ -13,7 +13,14 @@ service cloud.firestore {
 
     // Friends subcollection: Can manage own friends list
     match /users/{userId}/friends/{friendId} {
+       // Rule 1: Owner can read, write, delete entries in their own list.
        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+
+       // Rule 2: Allow a user (request.auth.uid) to create a friend entry for THEMSELVES
+       // (where friendId == request.auth.uid) in another user's (userId's) friend list.
+       // This is specifically for the reciprocal friend connection when accepting an invite.
+       allow create: if request.auth != null && request.auth.uid == friendId &&
+                         request.resource.data.keys().hasAll(['uid', 'displayName']);
     }
 
     // Activities: Logged-in users can read/create. Only creator can update/delete.

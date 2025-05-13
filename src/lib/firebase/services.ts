@@ -16,6 +16,8 @@ import {
   arrayRemove,
   orderBy,
   FieldValue,
+  QuerySnapshot, // Added import
+  DocumentData,  // Added import
   // limit,
   // startAfter,
 } from "firebase/firestore";
@@ -190,7 +192,7 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
      }
     const friends = await getFriends(uid);
     const friendIds = friends.map(f => f.uid);
-    const userAndFriendIds = Array.from(new Set([uid, ...friendIds])); 
+    const userAndFriendIds = Array.from(new Set([uid, ...friendIds]));
 
     if (userAndFriendIds.length === 0) return [];
 
@@ -198,7 +200,7 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
      const now = Timestamp.now();
 
      const chunks: string[][] = [];
-     const chunkSize = 30; 
+     const chunkSize = 30;
      for (let i = 0; i < userAndFriendIds.length; i += chunkSize) {
          chunks.push(userAndFriendIds.slice(i, i + chunkSize));
      }
@@ -212,34 +214,45 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
         );
         return getDocs(qCreator);
      });
-     
+
     const participantActivityPromises = chunks.map(async chunk => {
+        // Check if the current user (uid) is part of this chunk to optimize participant queries
         if (chunk.includes(uid)) {
+             // Fetch the current user's profile data to construct the participant object for querying
              const currentUserProfileForQuery = await getUserProfile(uid);
+             // This query is still tricky due to needing the exact match for object in array.
+             // Consider storing just participant UIDs or using a more flexible query structure.
+             // Firestore's `array-contains` requires the entire object to match.
+             // If name/photoURL can change, this query might miss activities if they change.
              const qUserIsParticipant = query(
                  activitiesRef,
                  where("participants", "array-contains", {
                      uid: uid,
-                     name: currentUserProfileForQuery?.displayName ?? null,
-                     photoURL: currentUserProfileForQuery?.photoURL ?? null
+                     // Using fetched or potentially default null values.
+                     // WARNING: This requires the stored participant object to EXACTLY match this.
+                     // The robust solution is a `participantUids` array.
+                     // For now, this will only match if the stored participant object for UID has matching name/photo (or null if that's what's stored).
+                     // This is a known limitation of the current query structure.
+                     name: currentUserProfileForQuery?.displayName ?? null, // Fetch current name
+                     photoURL: currentUserProfileForQuery?.photoURL ?? null // Fetch current photoURL
                  }),
                  where("date", ">=", now),
                  orderBy("date", "asc")
              );
              return getDocs(qUserIsParticipant);
         }
-        return Promise.resolve(null); 
+        return Promise.resolve(null); // Return a resolved promise with null if current user is not in chunk
      });
 
 
      const querySnapshots = await Promise.all(activityPromises);
-     const participantQuerySnapshots = (await Promise.all(participantActivityPromises)).filter(s => s !== null) as FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>[];
+     const participantQuerySnapshots = (await Promise.all(participantActivityPromises)).filter(s => s !== null) as QuerySnapshot<DocumentData>[];
 
 
      let activities = querySnapshots.flatMap(snapshot =>
          snapshot.docs.map(doc => {
              const data = doc.data() as Activity;
-             return toActivityClient(data); 
+             return toActivityClient(data);
             })
      );
 
@@ -249,11 +262,11 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
             return toActivityClient(data);
         })
      );
-     
+
      // Combine and deduplicate activities based on ID
      const combinedActivities = [...activities, ...participantActivities];
      const uniqueActivities = Array.from(new Map(combinedActivities.map(act => [act.id, act])).values());
-     
+
      uniqueActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
      return uniqueActivities;
@@ -288,7 +301,7 @@ export const generateInviteCode = async (inviterId: string, inviterName: string 
         console.error("Firestore (db) is not initialized. Cannot generate invite code.");
         throw new Error("Database service unavailable.");
     }
-    const code = uuidv4().substring(0, 8); 
+    const code = uuidv4().substring(0, 8);
     const inviteDocRef = doc(db, "invitations", code);
 
     const newInvitationForDb: Invitation = { // Ensure matches Invitation type
@@ -296,7 +309,7 @@ export const generateInviteCode = async (inviterId: string, inviterName: string 
         inviterId: inviterId,
         inviterName: inviterName,
         createdAt: serverTimestamp() as Timestamp,
-        expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) 
+        expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
     };
 
     await setDoc(inviteDocRef, newInvitationForDb);
@@ -337,7 +350,7 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
 
     const userFriendRef = doc(db, `users/${userId}/friends/${friendId}`);
     const userFriendSnap = await getDoc(userFriendRef);
-    
+
     const friendUserRef = doc(db, `users/${friendId}/friends/${userId}`);
     const friendUserSnap = await getDoc(friendUserRef);
 
@@ -347,7 +360,7 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
         (err as any).code = 'already-friends';
         throw err;
     }
-    
+
     const batch = writeBatch(db);
 
     const friendProfile = await getUserProfile(friendId);
@@ -376,7 +389,7 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
     if (!friendUserSnap.exists()) {
         batch.set(friendUserRef, currentUserAsFriendData);
     }
-    
+
     if (!userFriendSnap.exists() || !friendUserSnap.exists()) {
         await batch.commit();
     }
@@ -401,7 +414,7 @@ export const getFriends = async (userId: string): Promise<Friend[]> => {
        return [];
    }
   const friendsRef = collection(db, `users/${userId}/friends`);
-  const q = query(friendsRef, orderBy("displayName", "asc")); 
+  const q = query(friendsRef, orderBy("displayName", "asc"));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => doc.data() as Friend);
 };

@@ -1,3 +1,4 @@
+// src/components/auth/UserNav.tsx
 "use client";
 
 import React from 'react';
@@ -12,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAuth } from '@/context/AuthContext'; // Use the context hook
+import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { handleSignOut } from '@/lib/firebase/services';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';

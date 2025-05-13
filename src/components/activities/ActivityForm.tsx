@@ -20,9 +20,9 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { useToast } from "@/hooks/use-toast";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { createActivity, updateActivity } from '@/lib/firebase/services';
-import type { ActivityClient, CreateActivityData, UpdateActivityData, UserProfile } from '@/lib/types';
+import type { ActivityClient, CreateActivityData, UpdateActivityData } from '@/lib/types';
 
 
 const formSchema = z.object({

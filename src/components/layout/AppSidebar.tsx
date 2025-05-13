@@ -1,3 +1,4 @@
+// src/components/layout/AppSidebar.tsx
 "use client";
 
 import React from 'react';
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
 import { Mountain, LayoutDashboard, User, CalendarPlus, Users, Settings, LogOut } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { handleSignOut } from '@/lib/firebase/services';
 import { useRouter } from 'next/navigation';
 

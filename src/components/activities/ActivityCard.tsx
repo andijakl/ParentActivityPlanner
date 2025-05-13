@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { MapPin, CalendarDays, Users, UserPlus, UserMinus, ExternalLink } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { joinActivity, leaveActivity } from '@/lib/firebase/services';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';

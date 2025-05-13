@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { getActivity, joinActivity, leaveActivity, deleteActivity } from '@/lib/firebase/services';
 import type { ActivityClient } from '@/lib/types'; // Use ActivityClient
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -287,3 +287,4 @@ export default function ActivityDetailPage() {
     </Suspense>
   );
 }
+

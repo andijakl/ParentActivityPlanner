@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { getInvitation, addFriend, deleteInvitation } from '@/lib/firebase/services';
 import type { InvitationClient } from '@/lib/types'; // Use InvitationClient
 import { Button } from '@/components/ui/button';

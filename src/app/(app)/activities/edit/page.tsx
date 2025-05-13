@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { getActivity } from '@/lib/firebase/services';
 import type { ActivityClient } from '@/lib/types'; // Use ActivityClient
 import { ActivityForm } from '@/components/activities/ActivityForm';

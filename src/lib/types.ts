@@ -1,3 +1,4 @@
+
 import type { Timestamp } from "firebase/firestore";
 
 // --- Base types for re-use ---
@@ -5,14 +6,14 @@ interface BaseUserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
-  photoURL?: string | null;
+  photoURL?: string | null; // Can remain optional for UserProfile as it's from Auth
   childNickname?: string;
 }
 
 interface BaseActivity {
   id: string;
   title: string;
-  location?: string | null; // Changed from string | undefined to string | null
+  location?: string | null;
   creatorId: string;
   creatorName: string;
   creatorPhotoURL?: string | null;
@@ -29,11 +30,14 @@ interface BaseInvitation {
 
 export interface UserProfile extends BaseUserProfile {
   createdAt: Timestamp;
+  photoURL: string | null; // Make non-optional in Firestore, store null if not set
+  childNickname: string | null; // Make non-optional in Firestore, store null if not set
 }
 
 export interface Activity extends BaseActivity {
   date: Timestamp;
   createdAt: Timestamp;
+  location: string | null; // Ensure non-optional in Firestore data
 }
 
 export interface Invitation extends BaseInvitation {
@@ -45,11 +49,14 @@ export interface Invitation extends BaseInvitation {
 
 export interface UserProfileClient extends BaseUserProfile {
   createdAt: string; // ISO Date string
+  photoURL: string | null; // Mirror Firestore type
+  childNickname: string | null; // Mirror Firestore type
 }
 
 export interface ActivityClient extends BaseActivity {
   date: string; // ISO Date string
   createdAt: string; // ISO Date string
+  location: string | null; // Mirror Firestore type
 }
 
 export interface InvitationClient extends BaseInvitation {
@@ -71,6 +78,5 @@ export type UpdateActivityData = Partial<Omit<Activity, 'id' | 'createdAt' | 'cr
 export interface Friend {
     uid: string;
     displayName: string | null;
-    photoURL?: string | null;
+    photoURL: string | null; // Changed from optional to allow null explicitly
 }
-

@@ -1,3 +1,4 @@
+
 // src/components/auth/SignUpForm.tsx
 "use client";
 
@@ -77,11 +78,8 @@ export function SignUpForm() {
         if (error.code === 'already-friends') {
              toast({ title: "Already Friends", description: "You are already connected with this user." });
              try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
-        } else if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes("permission denied"))) {
-             toast({ title: "Connection Issue", description: "Could not establish the full friend connection due to permissions. One part may have failed.", variant: "destructive", duration: 7000 });
-             try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
         } else {
-            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || ''}`, variant: "destructive" });
+            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || 'An unexpected error occurred.'}`, variant: "destructive" });
         }
     }
   };
@@ -102,8 +100,8 @@ export function SignUpForm() {
         uid: user.uid,
         email: user.email,
         displayName: values.displayName,
-        photoURL: user.photoURL, // Will be null initially, can be updated later
-        childNickname: values.childNickname || '',
+        photoURL: user.photoURL, 
+        childNickname: values.childNickname || null, // Ensure null if empty string
       };
       await createUserProfile(newUserProfileData); 
 
@@ -153,7 +151,7 @@ export function SignUpForm() {
            email: user.email,
            displayName: user.displayName,
            photoURL: user.photoURL,
-           childNickname: '',
+           childNickname: null, // Initialize as null
          };
          await createUserProfile(newUserProfileData);
          console.log("Created new user profile for Google Sign-In user:", user.uid);
@@ -275,4 +273,3 @@ export function SignUpForm() {
     </Card>
   );
 }
-

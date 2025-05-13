@@ -1,3 +1,4 @@
+
 // src/app/(app)/friends/page.tsx
 "use client";
 
@@ -136,8 +137,8 @@ export default function FriendsPage() {
         await addFriend(user.uid, invitation.inviterId);
         await deleteInvitation(enteredInviteCode.trim());
         toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
-        setEnteredInviteCode(''); // Clear input
-        fetchFriends(); // Refresh friends list
+        setEnteredInviteCode(''); 
+        fetchFriends(); 
 
     } catch (error: any) {
         console.error("Error accepting entered invite code:", error);
@@ -145,12 +146,8 @@ export default function FriendsPage() {
              toast({ title: "Already Friends", description: "You are already connected with this user." });
              try { await deleteInvitation(enteredInviteCode.trim()); } catch (delErr) { /* ignore */ }
              fetchFriends();
-        } else if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes("permission denied"))) {
-             toast({ title: "Connection Issue", description: "Could not establish the full friend connection due to permissions. One part may have failed.", variant: "destructive", duration: 7000 });
-             try { await deleteInvitation(enteredInviteCode.trim()); } catch (delErr) { /* ignore */ }
-             fetchFriends();
         } else {
-            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || ''}`, variant: "destructive" });
+            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || 'An unexpected error occurred.'}`, variant: "destructive" });
         }
     } finally {
         setIsAcceptingEnteredInvite(false);
@@ -180,7 +177,6 @@ export default function FriendsPage() {
     <div className="container mx-auto py-6 px-4 md:px-6 space-y-8">
       <h1 className="text-3xl font-bold">Manage Friends</h1>
 
-      {/* Generate Invite Link Section */}
        <Card>
            <CardHeader>
              <CardTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5"/> Create Invite Link</CardTitle>
@@ -208,7 +204,6 @@ export default function FriendsPage() {
            )}
        </Card>
 
-        {/* Accept Invite Code Section */}
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Send className="h-5 w-5 transform -rotate-45"/> Accept an Invite Code</CardTitle>
@@ -233,8 +228,6 @@ export default function FriendsPage() {
             </CardContent>
         </Card>
 
-
-      {/* Friends List Section */}
        <Card>
            <CardHeader>
              <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5"/> Your Friends</CardTitle>
@@ -302,9 +295,8 @@ export default function FriendsPage() {
 function FriendsPageSkeleton() {
     return (
         <div className="container mx-auto py-6 px-4 md:px-6 space-y-8">
-            <Skeleton className="h-9 w-48" /> {/* Title */}
+            <Skeleton className="h-9 w-48" /> 
 
-             {/* Generate Invite Card Skeleton */}
              <Card>
                <CardHeader>
                    <Skeleton className="h-6 w-1/3" />
@@ -312,27 +304,24 @@ function FriendsPageSkeleton() {
                </CardHeader>
                <CardContent className="flex flex-col sm:flex-row items-center gap-4">
                   <Skeleton className="h-10 flex-1" />
-                  <Skeleton className="h-10 w-full sm:w-40" /> {/* Generate Button */}
+                  <Skeleton className="h-10 w-full sm:w-40" /> 
                </CardContent>
                 <CardFooter>
                      <Skeleton className="h-3 w-full" />
                 </CardFooter>
              </Card>
 
-             {/* Accept Invite Card Skeleton */}
              <Card>
                 <CardHeader>
                     <Skeleton className="h-6 w-1/2" />
                     <Skeleton className="h-4 w-full mt-1" />
                 </CardHeader>
                 <CardContent className="flex flex-col sm:flex-row items-stretch gap-2">
-                    <Skeleton className="h-10 flex-1" /> {/* Input */}
-                    <Skeleton className="h-10 w-full sm:w-32" /> {/* Button */}
+                    <Skeleton className="h-10 flex-1" /> 
+                    <Skeleton className="h-10 w-full sm:w-32" /> 
                 </CardContent>
              </Card>
 
-
-             {/* Friends List Card Skeleton */}
               <Card>
                  <CardHeader>
                       <Skeleton className="h-6 w-1/3" />
@@ -355,11 +344,9 @@ function FriendsListSkeleton() {
                        <Skeleton className="h-10 w-10 rounded-full" />
                        <Skeleton className="h-4 w-24" />
                    </div>
-                   <Skeleton className="h-8 w-8 rounded-full" /> {/* Remove Button */}
+                   <Skeleton className="h-8 w-8 rounded-full" /> 
                </div>
             ))}
         </div>
      )
 }
-
-

@@ -1,3 +1,4 @@
+
 // src/components/auth/SignInForm.tsx
 "use client";
 
@@ -72,11 +73,8 @@ export function SignInForm() {
         if (error.code === 'already-friends') {
              toast({ title: "Already Friends", description: "You are already connected with this user." });
              try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
-        } else if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes("permission denied"))) {
-            toast({ title: "Connection Issue", description: "Could not establish the full friend connection due to permissions. One part may have failed.", variant: "destructive", duration: 7000 });
-            try { await deleteInvitation(code); } catch (delErr) { /* ignore */ } // Delete invite even if partial fail, as acceptor's side likely worked.
         } else {
-            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || ''}`, variant: "destructive" });
+            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || 'An unexpected error occurred.'}`, variant: "destructive" });
         }
     }
 };
@@ -129,7 +127,6 @@ export function SignInForm() {
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-        // Ensure no partial UserProfile type, use Omit for creation
         const newUserProfileData: Omit<FirestoreUserProfile, 'createdAt'> = {
           uid: user.uid,
           email: user.email,
@@ -230,4 +227,3 @@ export function SignInForm() {
     </Card>
   );
 }
-

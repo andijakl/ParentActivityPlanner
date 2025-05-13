@@ -1,3 +1,4 @@
+
 // src/app/invite/page.tsx
 "use client";
 
@@ -35,7 +36,6 @@ function InvitePageContent() {
             if (data.expiresAt && new Date(data.expiresAt) < new Date()) {
                 setError("This invitation has expired.");
                 setInvitation(null);
-                 // Attempt to delete expired invitation
                 deleteInvitation(inviteCode).catch(err => console.warn("Failed to delete expired invitation:", err));
             } else {
                 setInvitation(data);
@@ -81,26 +81,21 @@ function InvitePageContent() {
         setIsAccepting(true);
         try {
             await addFriend(user.uid, invitation.inviterId);
-            // If addFriend succeeds (or throws 'already-friends'), we assume the connection is made or already exists.
-            await deleteInvitation(inviteCode); // Delete invitation after successful connection attempt
+            await deleteInvitation(inviteCode); 
             toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
-            router.push('/friends'); // Redirect to friends page to see the new connection
+            router.push('/friends'); 
         } catch (error: any) {
             console.error("Error accepting invite:", error);
             if (error.code === 'already-friends') {
                  toast({ title: "Already Friends", description: "You are already connected with this user." });
                  try { 
-                     await deleteInvitation(inviteCode); // Clean up invite if already friends
+                     await deleteInvitation(inviteCode); 
                  } catch (delErr) { 
                      console.error("Failed to delete already-friends invite", delErr); 
                  }
                  router.push('/friends');
-            } else if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes("permission denied"))) {
-                 toast({ title: "Connection Issue", description: "Could not establish the full friend connection. One part of the connection may have failed due to permissions. The inviter might need to accept you too.", variant: "destructive", duration: 7000 });
-                 // Even if partially failed, inviter was added to acceptor's list, so delete invite
-                 try { await deleteInvitation(inviteCode); } catch (delErr) { /* ignore */ }
-                 router.push('/friends'); // Go to friends page, partial connection might be visible
             } else {
+                // Generic error message if addFriend fails for other reasons (e.g. network, unexpected Firestore issue)
                 toast({ title: "Accept Failed", description: `Could not connect with friend. ${error.message || 'The invite might be invalid or an unexpected error occurred.'}`, variant: "destructive" });
             }
         } finally {
@@ -174,4 +169,3 @@ export default function InvitePage() {
     </Suspense>
   );
 }
-

@@ -6,7 +6,7 @@ interface BaseUserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
-  photoURL?: string | null; // Can remain optional for UserProfile as it's from Auth
+  photoURL?: string | null;
   childNickname: string | null;
 }
 
@@ -30,14 +30,15 @@ interface BaseInvitation {
 
 export interface UserProfile extends BaseUserProfile {
   createdAt: Timestamp;
-  photoURL: string | null; // Make non-optional in Firestore, store null if not set
-  childNickname: string | null; // Make non-optional in Firestore, store null if not set
+  photoURL: string | null;
+  childNickname: string | null;
 }
 
 export interface Activity extends BaseActivity {
   date: Timestamp;
   createdAt: Timestamp;
-  location?: string | null; // Ensure non-optional in Firestore data
+  location: string | null; // Ensure location is explicitly null if not set
+  participantUids?: string[]; // Array of UIDs for efficient querying of participation
 }
 
 export interface Invitation extends BaseInvitation {
@@ -49,14 +50,15 @@ export interface Invitation extends BaseInvitation {
 
 export interface UserProfileClient extends BaseUserProfile {
   createdAt: string; // ISO Date string
-  photoURL: string | null; // Mirror Firestore type
-  childNickname: string | null; // Mirror Firestore type
+  photoURL: string | null;
+  childNickname: string | null;
 }
 
 export interface ActivityClient extends BaseActivity {
   date: string; // ISO Date string
   createdAt: string; // ISO Date string
-  location: string | null; // Mirror Firestore type
+  location: string | null;
+  participantUids?: string[];
 }
 
 export interface InvitationClient extends BaseInvitation {
@@ -67,10 +69,13 @@ export interface InvitationClient extends BaseInvitation {
 // --- Data Transfer Object types for service functions ---
 
 // Data for creating an activity, expects date to be a Timestamp
-export type CreateActivityData = Omit<Activity, 'id' | 'createdAt'>;
+// participantUids should be initialized with creatorId
+export type CreateActivityData = Omit<Activity, 'id' | 'createdAt'> & { participantUids: string[] };
+
 
 // Data for updating, date should be Timestamp if provided
-export type UpdateActivityData = Partial<Omit<Activity, 'id' | 'createdAt' | 'creatorId' | 'creatorName' | 'creatorPhotoURL' | 'participants'>>;
+// Participants and participantUids are typically updated via join/leave specific functions
+export type UpdateActivityData = Partial<Omit<Activity, 'id' | 'createdAt' | 'creatorId' | 'creatorName' | 'creatorPhotoURL' | 'participants' | 'participantUids'>>;
 
 
 // --- Other types ---
@@ -78,5 +83,5 @@ export type UpdateActivityData = Partial<Omit<Activity, 'id' | 'createdAt' | 'cr
 export interface Friend {
     uid: string;
     displayName: string | null;
-    photoURL: string | null; // Changed from optional to allow null explicitly
+    photoURL: string | null;
 }

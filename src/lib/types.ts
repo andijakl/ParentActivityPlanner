@@ -37,7 +37,7 @@ export interface UserProfile extends BaseUserProfile {
 export interface Activity extends BaseActivity {
   date: Timestamp;
   createdAt: Timestamp;
-  location: string | null; // Ensure non-optional in Firestore data
+  location?: string | null; // Ensure non-optional in Firestore data
 }
 
 export interface Invitation extends BaseInvitation {

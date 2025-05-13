@@ -7,7 +7,7 @@ interface BaseUserProfile {
   email: string | null;
   displayName: string | null;
   photoURL?: string | null; // Can remain optional for UserProfile as it's from Auth
-  childNickname?: string;
+  childNickname: string | null;
 }
 
 interface BaseActivity {

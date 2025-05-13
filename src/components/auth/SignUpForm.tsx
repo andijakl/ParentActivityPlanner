@@ -7,18 +7,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config';
-import { doc, getDoc } from "firebase/firestore"; 
+import { doc, getDoc, serverTimestamp, Timestamp } from "firebase/firestore"; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// import { Label } from "@/components/ui/label"; // Not directly used
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
-import type { UserProfile as FirestoreUserProfile, InvitationClient } from '@/lib/types'; // Use FirestoreUserProfile for creation
+import type { UserProfile as FirestoreUserProfile, InvitationClient } from '@/lib/types'; 
 import { addFriend, deleteInvitation, getInvitation, createUserProfile } from '@/lib/firebase/services';
 
 
@@ -62,6 +61,7 @@ export function SignUpForm() {
       }
        if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
         toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
+        try { await deleteInvitation(code); } catch (delErr) { console.warn("Failed to delete expired invite:", delErr); }
         return;
       }
 
@@ -69,21 +69,20 @@ export function SignUpForm() {
            toast({ title: "Cannot Add Self", description: "You cannot accept your own invitation.", variant: "destructive" });
            return;
       }
-
-       const friendRef = doc(db, `users/${userId}/friends/${invitation.inviterId}`);
-       const friendSnap = await getDoc(friendRef);
-
-        if (!friendSnap.exists()) {
-            await addFriend(userId, invitation.inviterId);
-            await deleteInvitation(code);
-            toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
+        await addFriend(userId, invitation.inviterId);
+        await deleteInvitation(code);
+        toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
+    } catch (error: any) {
+      console.error("Error handling invite code after sign-up:", error);
+        if (error.code === 'already-friends') {
+             toast({ title: "Already Friends", description: "You are already connected with this user." });
+             try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
+        } else if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes("permission denied"))) {
+             toast({ title: "Connection Issue", description: "Could not establish the full friend connection due to permissions. One part may have failed.", variant: "destructive", duration: 7000 });
+             try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
         } else {
-            toast({ title: "Already Friends", description: "You are already connected with this friend." });
-            await deleteInvitation(code); 
+            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || ''}`, variant: "destructive" });
         }
-    } catch (error) {
-      console.error("Error handling invite code:", error);
-      toast({ title: "Invite Error", description: "Could not process the invite code.", variant: "destructive" });
     }
   };
 
@@ -103,7 +102,7 @@ export function SignUpForm() {
         uid: user.uid,
         email: user.email,
         displayName: values.displayName,
-        photoURL: user.photoURL,
+        photoURL: user.photoURL, // Will be null initially, can be updated later
         childNickname: values.childNickname || '',
       };
       await createUserProfile(newUserProfileData); 
@@ -246,7 +245,7 @@ export function SignUpForm() {
                 <FormItem>
                   <FormLabel>Child's Nickname (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Little Explorer" {...field} disabled={isLoading || isGoogleLoading} />
+                    <Input placeholder="e.g., Little Explorer" {...field} value={field.value ?? ""} onChange={field.onChange} disabled={isLoading || isGoogleLoading} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -276,3 +275,4 @@ export function SignUpForm() {
     </Card>
   );
 }
+

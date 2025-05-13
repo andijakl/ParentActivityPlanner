@@ -6,20 +6,19 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type User as FirebaseUser } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase/config'; // auth and db can be null
-import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from '@/lib/firebase/config'; 
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// import { Label } from "@/components/ui/label"; // Not directly used
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
-import type { UserProfile, InvitationClient } from '@/lib/types'; // UserProfile for type reference
-import { createUserProfile, addFriend, deleteInvitation, getInvitation } from '@/lib/firebase/services'; // Import services
+import type { UserProfile as FirestoreUserProfile, InvitationClient } from '@/lib/types'; 
+import { createUserProfile, addFriend, deleteInvitation, getInvitation } from '@/lib/firebase/services'; 
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -57,6 +56,7 @@ export function SignInForm() {
         }
         if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
             toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
+            try { await deleteInvitation(code); } catch (delErr) { console.warn("Failed to delete expired invite:", delErr); }
             return;
         }
         if (signedInUser.uid === invitation.inviterId) {
@@ -64,20 +64,20 @@ export function SignInForm() {
             return;
         }
 
-        const friendRef = doc(db, `users/${signedInUser.uid}/friends/${invitation.inviterId}`);
-        const friendSnap = await getDoc(friendRef);
-
-        if (!friendSnap.exists()) {
-            await addFriend(signedInUser.uid, invitation.inviterId);
-            await deleteInvitation(code);
-            toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
-        } else {
-            toast({ title: "Already Friends", description: "You are already connected with this friend." });
-            await deleteInvitation(code); 
-        }
-    } catch (error) {
+        await addFriend(signedInUser.uid, invitation.inviterId);
+        await deleteInvitation(code);
+        toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
+    } catch (error: any) {
         console.error("Error handling invite code after sign-in:", error);
-        toast({ title: "Invite Error", description: "Could not process the invite code.", variant: "destructive" });
+        if (error.code === 'already-friends') {
+             toast({ title: "Already Friends", description: "You are already connected with this user." });
+             try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
+        } else if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes("permission denied"))) {
+            toast({ title: "Connection Issue", description: "Could not establish the full friend connection due to permissions. One part may have failed.", variant: "destructive", duration: 7000 });
+            try { await deleteInvitation(code); } catch (delErr) { /* ignore */ } // Delete invite even if partial fail, as acceptor's side likely worked.
+        } else {
+            toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || ''}`, variant: "destructive" });
+        }
     }
 };
 
@@ -129,7 +129,8 @@ export function SignInForm() {
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-        const newUserProfileData: Omit<UserProfile, 'createdAt'> = {
+        // Ensure no partial UserProfile type, use Omit for creation
+        const newUserProfileData: Omit<FirestoreUserProfile, 'createdAt'> = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
@@ -229,3 +230,4 @@ export function SignInForm() {
     </Card>
   );
 }
+

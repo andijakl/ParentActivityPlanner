@@ -3,15 +3,15 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth'; // Corrected import path
+import { useAuth } from '@/hooks/useAuth'; 
 import { getInvitation, addFriend, deleteInvitation } from '@/lib/firebase/services';
-import type { InvitationClient } from '@/lib/types'; // Use InvitationClient
+import type { InvitationClient } from '@/lib/types'; 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Added CardFooter
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { UserPlus, AlertTriangle, Home } from 'lucide-react'; // Removed CheckCircle as it's not used
+import { UserPlus, AlertTriangle, Home } from 'lucide-react'; 
 
 function InvitePageContent() {
   const searchParams = useSearchParams();
@@ -20,7 +20,7 @@ function InvitePageContent() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const [invitation, setInvitation] = useState<InvitationClient | null>(null); // Use InvitationClient
+  const [invitation, setInvitation] = useState<InvitationClient | null>(null); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
@@ -29,13 +29,14 @@ function InvitePageContent() {
     if (inviteCode) {
       setIsLoading(true);
       setError(null);
-      getInvitation(inviteCode) // This now returns InvitationClient
+      getInvitation(inviteCode) 
         .then(data => {
           if (data) {
-            // Optional: Check if invitation.expiresAt (string) is past
             if (data.expiresAt && new Date(data.expiresAt) < new Date()) {
                 setError("This invitation has expired.");
                 setInvitation(null);
+                 // Attempt to delete expired invitation
+                deleteInvitation(inviteCode).catch(err => console.warn("Failed to delete expired invitation:", err));
             } else {
                 setInvitation(data);
             }
@@ -63,12 +64,14 @@ function InvitePageContent() {
         }
 
         if (!user) {
-            // Redirect to signup page with invite code if not logged in
             router.push(`/signup?invite=${inviteCode}`);
             return;
         }
 
-        if (!invitation) return;
+        if (!invitation) {
+            toast({ title: "Error", description: "Invitation details not loaded.", variant: "destructive" });
+            return;
+        }
 
         if (user.uid === invitation.inviterId) {
              toast({ title: "Cannot Add Self", description: "You cannot accept your own invitation.", variant: "destructive" });
@@ -78,21 +81,28 @@ function InvitePageContent() {
         setIsAccepting(true);
         try {
             await addFriend(user.uid, invitation.inviterId);
-            // addFriend service handles bidirectional friendship
-            await deleteInvitation(inviteCode);
-
-            toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.`, });
-            router.push('/dashboard');
-
-        } catch (error) {
+            // If addFriend succeeds (or throws 'already-friends'), we assume the connection is made or already exists.
+            await deleteInvitation(inviteCode); // Delete invitation after successful connection attempt
+            toast({ title: "Friend Added!", description: `You are now connected with ${invitation.inviterName || 'your friend'}.` });
+            router.push('/friends'); // Redirect to friends page to see the new connection
+        } catch (error: any) {
             console.error("Error accepting invite:", error);
-             if (error instanceof Error && error.message.includes("already friends")) {
-                 toast({ title: "Already Friends", description: "You are already connected with this user.", variant: "default" });
-                 try { await deleteInvitation(inviteCode); } catch (delErr) { console.error("Failed to delete already-friends invite", delErr); }
-                 router.push('/dashboard');
-             } else {
-                toast({ title: "Accept Failed", description: "Could not connect with friend. The invite might be invalid or already used.", variant: "destructive" });
-             }
+            if (error.code === 'already-friends') {
+                 toast({ title: "Already Friends", description: "You are already connected with this user." });
+                 try { 
+                     await deleteInvitation(inviteCode); // Clean up invite if already friends
+                 } catch (delErr) { 
+                     console.error("Failed to delete already-friends invite", delErr); 
+                 }
+                 router.push('/friends');
+            } else if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes("permission denied"))) {
+                 toast({ title: "Connection Issue", description: "Could not establish the full friend connection. One part of the connection may have failed due to permissions. The inviter might need to accept you too.", variant: "destructive", duration: 7000 });
+                 // Even if partially failed, inviter was added to acceptor's list, so delete invite
+                 try { await deleteInvitation(inviteCode); } catch (delErr) { /* ignore */ }
+                 router.push('/friends'); // Go to friends page, partial connection might be visible
+            } else {
+                toast({ title: "Accept Failed", description: `Could not connect with friend. ${error.message || 'The invite might be invalid or an unexpected error occurred.'}`, variant: "destructive" });
+            }
         } finally {
             setIsAccepting(false);
         }
@@ -139,7 +149,7 @@ function InvitePageContent() {
             <p className="text-destructive">{error}</p>
           ) : invitation ? (
             <Button onClick={handleAcceptInvite} disabled={isAccepting || !inviteCode} className="w-full">
-              {isAccepting ? 'Connecting...' : (user ? 'Accept Invitation' : 'Sign Up to Accept')}
+              {isAccepting ? 'Connecting...' : (user ? 'Accept Invitation' : 'Sign Up/In to Accept')}
             </Button>
           ) : (
              <p className="text-muted-foreground">Loading invitation details...</p>
@@ -164,3 +174,4 @@ export default function InvitePage() {
     </Suspense>
   );
 }
+

@@ -13,65 +13,98 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
 };
 
-let app: FirebaseApp;
+let app: FirebaseApp | null = null; // Initialize as null
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 let firebaseInitializationError: Error | null = null;
 
-function isFirebaseConfigured(): boolean {
-  return !!(
-    firebaseConfig.apiKey &&
-    firebaseConfig.authDomain &&
-    firebaseConfig.projectId
-  );
+function isFirebaseConfiguredCorrectly(): boolean {
+  const essentialKeys: (keyof typeof firebaseConfig)[] = ['apiKey', 'authDomain', 'projectId'];
+  for (const key of essentialKeys) {
+    if (!firebaseConfig[key]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 if (!getApps().length) {
-  if (isFirebaseConfigured()) {
+  if (isFirebaseConfiguredCorrectly()) {
     try {
       app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      // Log the original error for debugging but store a standard Error object.
-      console.error("Firebase initialization failed during initializeApp/getAuth/getFirestore:", errorMessage, error);
-      firebaseInitializationError = new Error(`Firebase Init Failed: ${errorMessage}`);
-      auth = null;
-      db = null;
+      console.error("Firebase: initializeApp() failed:", errorMessage, error);
+      firebaseInitializationError = new Error(`Firebase Core App Initialization Failed: ${errorMessage}`);
+      // app, auth, db remain null
+    }
+
+    if (app && !firebaseInitializationError) { // Proceed only if app initialized successfully
+      try {
+        auth = getAuth(app);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Firebase: getAuth() failed:", errorMessage, error);
+        firebaseInitializationError = new Error(`Firebase Auth Initialization Failed: ${errorMessage}`);
+        auth = null; // Ensure auth is null on error
+      }
+
+      try {
+        db = getFirestore(app);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Firebase: getFirestore() failed:", errorMessage, error);
+        firebaseInitializationError = new Error(`Firebase Firestore Initialization Failed: ${errorMessage}`);
+        db = null; // Ensure db is null on error
+      }
     }
   } else {
     const errorMessage =
       "Firebase configuration is missing essential values (apiKey, authDomain, projectId). " +
       "Please check your .env.local file and ensure NEXT_PUBLIC_FIREBASE_* variables are set correctly. " +
       "Firebase services will not be initialized.";
-    console.error(errorMessage); // This console.error is fine, it's for developer info.
+    // console.error is fine for developer info, especially for config issues.
+    console.error(errorMessage);
     firebaseInitializationError = new Error(errorMessage);
-    auth = null;
-    db = null;
+    // app, auth, db remain null
   }
 } else {
-  app = getApp();
-  if (isFirebaseConfigured()) {
-     try {
-        auth = getAuth(app);
-        db = getFirestore(app);
-     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("Firebase getAuth/getFirestore failed on existing app:", errorMessage, error);
-        firebaseInitializationError = new Error(`Firebase Auth/Firestore Get Failed on Existing App: ${errorMessage}`);
-        auth = null;
-        db = null;
+  // An app already exists, likely due to HMR or multiple initializations.
+  app = getApp(); // Get the existing app
+  // Try to get services, assuming the existing app might be correctly configured.
+  // This path is less common for the initial load error scenario.
+  if (isFirebaseConfiguredCorrectly()) {
+     if (app && !auth) { // Check if auth is not already initialized
+        try {
+            auth = getAuth(app);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.warn("Firebase: getAuth() on existing app failed:", errorMessage, error);
+            // Potentially set firebaseInitializationError or handle differently if this is a critical path
+            // For now, primarily focusing on initial load errors.
+             if (!firebaseInitializationError) firebaseInitializationError = new Error(`Firebase Auth Get on Existing App Failed: ${errorMessage}`);
+            auth = null;
+        }
      }
-  } else {
+     if (app && !db) { // Check if db is not already initialized
+        try {
+            db = getFirestore(app);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.warn("Firebase: getFirestore() on existing app failed:", errorMessage, error);
+             if (!firebaseInitializationError) firebaseInitializationError = new Error(`Firebase Firestore Get on Existing App Failed: ${errorMessage}`);
+            db = null;
+        }
+     }
+  } else if (!firebaseInitializationError) {
+    // Existing app, but current config is bad, and no prior error was set
     const errorMessage =
       "Firebase app exists, but current configuration is invalid. Services may not work as expected.";
-    console.warn(errorMessage); 
+    console.warn(errorMessage);
     firebaseInitializationError = new Error(errorMessage);
-    auth = null;
+    auth = null; // Ensure services are nulled out if config is bad now
     db = null;
   }
 }
 
-export { app, auth, db, firebaseInitializationError, isFirebaseConfigured };
-
+export { app, auth, db, firebaseInitializationError, isFirebaseConfiguredCorrectly as isFirebaseConfigured };

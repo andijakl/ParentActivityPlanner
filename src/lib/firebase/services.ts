@@ -15,7 +15,6 @@ import {
   arrayUnion,
   arrayRemove,
   orderBy,
-  type FieldValue,
   type QuerySnapshot,
   type DocumentData,
 } from "firebase/firestore";
@@ -308,7 +307,7 @@ export const getDashboardActivities = async (uid: string): Promise<ActivityClien
     const participantQuerySnapshots = (await Promise.all(participantActivityPromises)).filter(s => s !== null) as QuerySnapshot<DocumentData>[];
 
 
-    let activities = querySnapshots.flatMap(snapshot =>
+    const activities = querySnapshots.flatMap(snapshot =>
         snapshot.docs.map(doc => toActivityClient(doc.data() as Activity))
     );
     

@@ -12,18 +12,17 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarTrigger // You might need this if you want a trigger inside the sidebar itself
+  // SidebarTrigger // You might need this if you want a trigger inside the sidebar itself - Removed as unused
 } from "@/components/ui/sidebar";
-import { Button } from '@/components/ui/button';
-import { Mountain, LayoutDashboard, User, CalendarPlus, Users, Settings, LogOut } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth'; // Corrected import path
+// import { Button } from '@/components/ui/button'; // Removed as unused
+import { Mountain, LayoutDashboard, User, CalendarPlus, Users, LogOut } from 'lucide-react'; // Removed Settings
+// import { useAuth } from '@/hooks/useAuth'; // Corrected import path - Removed as unused
 import { handleSignOut } from '@/lib/firebase/services';
 import { useRouter } from 'next/navigation';
 
 
 export function AppSidebar() {
     const pathname = usePathname();
-    const { user } = useAuth();
     const router = useRouter();
 
     const isActive = (path: string) => pathname === path;

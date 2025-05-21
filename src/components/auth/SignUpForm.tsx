@@ -6,9 +6,9 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup, type User as FirebaseUser } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'; // Removed FirebaseUser
 import { auth, db } from '@/lib/firebase/config';
-import { doc, getDoc, serverTimestamp, Timestamp } from "firebase/firestore"; 
+import { doc, getDoc } from "firebase/firestore"; // Removed serverTimestamp, Timestamp
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -62,7 +62,7 @@ export function SignUpForm() {
       }
        if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
         toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
-        try { await deleteInvitation(code); } catch (delErr) { console.warn("Failed to delete expired invite:", delErr); }
+        try { await deleteInvitation(code); } catch { console.warn("Failed to delete expired invite."); }
         return;
       }
 
@@ -77,7 +77,7 @@ export function SignUpForm() {
       console.error("Error handling invite code after sign-up:", error);
         if (error.code === 'already-friends') {
              toast({ title: "Already Friends", description: "You are already connected with this user." });
-             try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
+             try { await deleteInvitation(code); } catch { /* ignore */ }
         } else {
             toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || 'An unexpected error occurred.'}`, variant: "destructive" });
         }
@@ -190,7 +190,7 @@ export function SignUpForm() {
         <CardDescription>Create your Parent Activity Hub account.</CardDescription>
         {inviteCode && (
             <CardDescription className="text-primary pt-2">
-                You've been invited! Sign up to connect with your friend.
+                You&apos;ve been invited! Sign up to connect with your friend.
             </CardDescription>
         )}
       </CardHeader>
@@ -241,7 +241,7 @@ export function SignUpForm() {
               name="childNickname"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Child's Nickname (Optional)</FormLabel>
+                  <FormLabel>Child&apos;s Nickname (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Little Explorer" {...field} value={field.value ?? ""} onChange={field.onChange} disabled={isLoading || isGoogleLoading} />
                   </FormControl>

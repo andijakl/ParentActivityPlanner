@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/useAuth'; // Corrected import path
 import { handleSignOut } from '@/lib/firebase/services';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, User, Settings, Users, CalendarPlus } from 'lucide-react'; // Import icons
+import { LogOut, User, Users, CalendarPlus } from 'lucide-react'; // Import icons, removed Settings
 
 export function UserNav() {
   const { user, userProfile } = useAuth();

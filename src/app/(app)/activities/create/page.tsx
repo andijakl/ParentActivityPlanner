@@ -1,6 +1,6 @@
 // src/app/(app)/activities/create/page.tsx
 import { ActivityForm } from '@/components/activities/ActivityForm';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function CreateActivityPage() {
   return (

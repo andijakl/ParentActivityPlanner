@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config'; 
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore"; // Removed setDoc, serverTimestamp, Timestamp
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -57,7 +57,7 @@ export function SignInForm() {
         }
         if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
             toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
-            try { await deleteInvitation(code); } catch (delErr) { console.warn("Failed to delete expired invite:", delErr); }
+            try { await deleteInvitation(code); } catch { console.warn("Failed to delete expired invite."); }
             return;
         }
         if (signedInUser.uid === invitation.inviterId) {
@@ -72,7 +72,7 @@ export function SignInForm() {
         console.error("Error handling invite code after sign-in:", error);
         if (error.code === 'already-friends') {
              toast({ title: "Already Friends", description: "You are already connected with this user." });
-             try { await deleteInvitation(code); } catch (delErr) { /* ignore */ }
+             try { await deleteInvitation(code); } catch { /* ignore */ }
         } else {
             toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || 'An unexpected error occurred.'}`, variant: "destructive" });
         }
@@ -170,7 +170,7 @@ export function SignInForm() {
         <CardDescription>Enter your email and password to access your account.</CardDescription>
         {inviteCode && (
             <CardDescription className="text-primary pt-2">
-                You've been invited! Sign in to connect.
+                You&apos;ve been invited! Sign in to connect.
             </CardDescription>
         )}
       </CardHeader>
@@ -219,7 +219,7 @@ export function SignInForm() {
          </Button>
       </CardContent>
        <CardFooter className="flex justify-center text-sm">
-        <p>Don't have an account?&nbsp;</p>
+        <p>Don&apos;t have an account?&nbsp;</p>
          <Link href={inviteCode ? `/signup?invite=${inviteCode}` : "/signup"} className="font-medium text-primary hover:underline underline-offset-4">
            Sign Up
          </Link>

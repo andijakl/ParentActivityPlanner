@@ -158,7 +158,7 @@ export default function ProfilePage() {
                 name="childNickname"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Child's Nickname (Optional)</FormLabel>
+                    <FormLabel>Child&apos;s Nickname (Optional)</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g., Little Adventurer" {...field} value={field.value ?? ""} onChange={field.onChange} disabled={isLoading} />
                     </FormControl>

@@ -129,7 +129,7 @@ function InvitePageContent() {
                   </span>
              ) : invitation ? (
                   <span className="flex items-center justify-center gap-2 text-primary">
-                     <UserPlus/> You're Invited!
+                     <UserPlus/> You&apos;re Invited!
                   </span>
              ) : (
                  'Loading Invitation...'

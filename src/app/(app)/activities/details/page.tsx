@@ -220,7 +220,7 @@ function ActivityDetailContent() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Are you sure you want to delete the activity "{activity.title}"? This action cannot be undone.
+                                    Are you sure you want to delete the activity &quot;{activity.title}&quot;? This action cannot be undone.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

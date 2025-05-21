@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, Trash2, RefreshCw, Send, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, Copy, Trash2, RefreshCw, Send } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -123,7 +123,7 @@ export default function FriendsPage() {
         }
         if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
             toast({ title: "Invite Expired", description: "This invitation link has expired.", variant: "destructive" });
-            try { await deleteInvitation(enteredInviteCode.trim()); } catch (delErr) { console.warn("Failed to delete expired invite:", delErr); }
+            try { await deleteInvitation(enteredInviteCode.trim()); } catch { console.warn("Failed to delete expired invite."); }
             setIsAcceptingEnteredInvite(false);
             return;
         }
@@ -144,7 +144,7 @@ export default function FriendsPage() {
         console.error("[FriendsPage] Error accepting entered invite code:", error);
         if (error.code === 'already-friends') {
              toast({ title: "Already Friends", description: "You are already connected with this user." });
-             try { await deleteInvitation(enteredInviteCode.trim()); } catch (delErr) { /* ignore */ }
+             try { await deleteInvitation(enteredInviteCode.trim()); } catch { /* ignore */ }
              fetchFriends(); // Refresh friends list even if already friends
         } else {
             toast({ title: "Invite Error", description: `Could not process the invite code. ${error.message || 'An unexpected error occurred.'}`, variant: "destructive" });
@@ -191,7 +191,7 @@ export default function FriendsPage() {
                      </Button>
                  </>
              ) : (
-                <p className="text-sm text-muted-foreground flex-1">Click "Generate" to create a shareable invite link.</p>
+                <p className="text-sm text-muted-foreground flex-1">Click &quot;Generate&quot; to create a shareable invite link.</p>
              )}
               <Button onClick={handleGenerateInvite} disabled={isGeneratingCode} className="w-full sm:w-auto">
                  {isGeneratingCode ? <><RefreshCw className="mr-2 h-4 w-4 animate-spin"/> Generating...</> : <><UserPlus className="mr-2 h-4 w-4"/>Generate Invite Link</>}
@@ -282,7 +282,7 @@ export default function FriendsPage() {
                     ))}
                   </div>
                ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">You haven't connected with any friends yet. Share your invite link or accept one!</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">You haven&apos;t connected with any friends yet. Share your invite link or accept one!</p>
                )}
            </CardContent>
        </Card>
